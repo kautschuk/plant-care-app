@@ -46,3 +46,33 @@
 - The focused suite cannot be fully green until Task 3 implements `applyScheduleAction`; this is an intentional scope boundary and the failure is unchanged from the pre-existing Task 1 transition test.
 - The Task 1 interfaces do not expose a knowledge-provided season resolver, so the implementation uses the documented deterministic calendar fallback described above. If product knowledge later supplies explicit season boundaries, `activeSeasonFor` should consume that input instead.
 - `ScheduleProjection` has no `guidanceLevel` field despite the Task 2 prose mentioning guidance level, so no untyped field was added to the public projection contract.
+
+## Task 2 Repair Report
+
+### Changes
+
+- Validated `today` and `lastCompletedDate` at both `initializeSchedule` and `projectSchedule` runtime boundaries, rejecting a last-completed date after today.
+- Added typed `guidanceLevel` to `PlannerProjection`, sourced from knowledge `taxonomicLevel`.
+- Added a knowledge-owned `seasonFor(climate, today)` resolver and used it for projection; year-round knowledge remains permanently growing.
+- Added focused tests for runtime date rejection, guidance level, and climate-dependent season resolution. Updated existing January fixtures to satisfy the date contract.
+- Added final newlines to all changed files.
+
+### Commands and output
+
+- `npm test -- --run tests/scheduling/engine.test.ts -t "rejects future|guidance level|knowledge climate-aware"`
+  - `Test Files 1 passed (1)`
+  - `Tests 4 passed | 14 skipped (18)`
+- `npm test -- --run tests/scheduling/engine.test.ts`
+  - `Test Files 1 failed (1)`
+  - `Tests 1 failed | 17 passed (18)`
+  - The only failure is the intentional Task 3 `applyScheduleAction` stub: `Scheduling behavior is implemented in a later engine task`.
+- `npx tsc --noEmit`
+  - Passed with exit code 0 and no diagnostics.
+- `git diff --check`
+  - Passed with no output.
+- Final-newline check for `src/domain/scheduling/engine.ts`, `src/domain/scheduling/knowledge.ts`, `src/domain/scheduling/types.ts`, and `tests/scheduling/engine.test.ts`
+  - Passed with no output.
+
+### Concerns
+
+- The focused suite remains one test short of green because the existing Task 3 transition test intentionally targets an unimplemented function. No Task 3 transition behavior was added.

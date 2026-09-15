@@ -42,7 +42,11 @@ describe('scheduling engine contract', () => {
     });
     const dormantResult = projectSchedule({
       today: date('2026-01-14'),
-      state: seasonalScheduleState({ growingDays: 2, dormantDays: 0 }),
+      state: seasonalScheduleState({
+        growingDays: 2,
+        dormantDays: 0,
+        lastCompletedDate: '2026-01-01',
+      }),
       knowledge: growingDormantKnowledge({
         growingIntervalDays: 7,
         dormantIntervalDays: 12,
@@ -57,7 +61,10 @@ describe('scheduling engine contract', () => {
   });
 
   it('uses one year-round adjustment for year-round plants', () => {
-    const state = scheduleState({ learnedAdjustmentDays: 2 });
+    const state = scheduleState({
+      learnedAdjustmentDays: 2,
+      lastCompletedDate: '2026-01-01',
+    });
 
     const result = projectSchedule({
       today: date('2026-01-14'),
@@ -136,6 +143,68 @@ describe('scheduling engine contract', () => {
       '2026-09-10',
     );
     expect(result.projection.nextDueDate).toBe('2026-09-17');
+  });
+
+  it('rejects future today and last-completed dates at initialization', () => {
+    expect(() =>
+      initializeSchedule({
+        today: date('2026-09-15'),
+        lastCompletedDate: date('2026-09-16'),
+        knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+        climate: 'TEMPERATE',
+      }),
+    ).toThrow('Date cannot be in the future');
+  });
+
+  it('rejects future today and last-completed dates at projection', () => {
+    expect(() =>
+      projectSchedule({
+        today: date('2026-09-15'),
+        state: scheduleState({
+          learnedAdjustmentDays: 0,
+          lastCompletedDate: '2026-09-16',
+        }),
+        knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+        climate: 'TEMPERATE',
+      }),
+    ).toThrow('Date cannot be in the future');
+  });
+
+  it('projects the knowledge taxonomic level as guidance level', () => {
+    const result = projectSchedule({
+      today: date('2026-09-14'),
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      knowledge: {
+        ...wateringKnowledge({ baseIntervalDays: 7 }),
+        taxonomicLevel: 'GENUS',
+      },
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.guidanceLevel).toBe('GENUS');
+  });
+
+  it('uses the knowledge climate-aware season resolver', () => {
+    const knowledge = growingDormantKnowledge({
+      growingIntervalDays: 7,
+      dormantIntervalDays: 12,
+      seasonFor: (climate) =>
+        climate === 'TROPICAL' ? 'GROWING' : 'DORMANT',
+    });
+
+    const result = projectSchedule({
+      today: date('2026-01-14'),
+      state: seasonalScheduleState({
+        growingDays: 0,
+        dormantDays: 0,
+        lastCompletedDate: '2026-01-01',
+      }),
+      knowledge,
+      climate: 'TROPICAL',
+    });
+
+    expect(result.activeSeason).toBe('GROWING');
+    expect(result.effectiveIntervalDays).toBe(7);
   });
 
   it('does not reduce the persisted adjustment below the one-day effective floor', () => {
@@ -229,9 +298,12 @@ describe('scheduling engine contract', () => {
   });
 });
 
-function scheduleState(overrides: { learnedAdjustmentDays: number }): ScheduleState {
+function scheduleState(overrides: {
+  learnedAdjustmentDays: number;
+  lastCompletedDate?: string;
+}): ScheduleState {
   const state: CareScheduleState = {
-    lastCompletedDate: date('2026-09-10'),
+    lastCompletedDate: date(overrides.lastCompletedDate ?? '2026-09-10'),
     learnedAdjustments: {
       model: 'YEAR_ROUND',
       days: overrides.learnedAdjustmentDays,
@@ -247,9 +319,10 @@ function scheduleState(overrides: { learnedAdjustmentDays: number }): ScheduleSt
 function seasonalScheduleState(overrides: {
   growingDays: number;
   dormantDays: number;
+  lastCompletedDate?: string;
 }): ScheduleState {
   const state: CareScheduleState = {
-    lastCompletedDate: date('2026-09-10'),
+    lastCompletedDate: date(overrides.lastCompletedDate ?? '2026-09-10'),
     learnedAdjustments: {
       model: 'GROWING_DORMANT',
       growingDays: overrides.growingDays,

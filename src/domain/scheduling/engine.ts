@@ -20,16 +20,18 @@ const NOT_IMPLEMENTED =
 export function initializeSchedule(
   input: InitializeScheduleInput,
 ): ScheduleCalculation {
+  const today = validateISODate(input.today);
+  const lastCompletedDate = validateISODate(input.lastCompletedDate, today);
   const careType = input.careType ?? 'WATERING';
   const learnedAdjustments = initialAdjustments(input.knowledge.seasonalModel);
   const schedule: CareScheduleState = {
-    lastCompletedDate: input.lastCompletedDate,
-    nextDueDate: input.lastCompletedDate,
+    lastCompletedDate,
+    nextDueDate: lastCompletedDate,
     learnedAdjustments,
   };
   const state: ScheduleState = { careSchedules: { [careType]: schedule } };
   const projection = projectSchedule({
-    today: input.today,
+    today,
     state,
     knowledge: input.knowledge,
     climate: input.climate,
@@ -49,13 +51,15 @@ export function initializeSchedule(
 export function projectSchedule(
   input: ProjectScheduleInput,
 ): PlannerProjection {
+  const today = validateISODate(input.today);
   const careType = input.careType ?? 'WATERING';
   const schedule = input.state.careSchedules[careType];
   if (!schedule) {
     throw new Error(`No ${careType} schedule is enabled`);
   }
 
-  const activeSeason = activeSeasonFor(input.today, input.knowledge.seasonalModel);
+  const lastCompletedDate = validateISODate(schedule.lastCompletedDate, today);
+  const activeSeason = input.knowledge.seasonFor(input.climate, today);
   const baseIntervalDays = input.knowledge.intervalFor(
     input.climate,
     activeSeason,
@@ -69,7 +73,7 @@ export function projectSchedule(
     1,
     baseIntervalDays + activeAdjustmentDays,
   );
-  const nextDueDate = addDays(schedule.lastCompletedDate, effectiveIntervalDays);
+  const nextDueDate = addDays(lastCompletedDate, effectiveIntervalDays);
   const projection: ScheduleProjection = {
     activeSeason,
     baseIntervalDays,
@@ -80,6 +84,7 @@ export function projectSchedule(
 
   return {
     ...projection,
+    guidanceLevel: input.knowledge.taxonomicLevel,
     tasks: plannerTasks(input.knowledge.fertilizerModes, careType),
   };
 }
@@ -102,18 +107,6 @@ function initialAdjustments(
   return seasonalModel === 'YEAR_ROUND'
     ? { model: 'YEAR_ROUND', days: 0 }
     : { model: 'GROWING_DORMANT', growingDays: 0, dormantDays: 0 };
-}
-
-function activeSeasonFor(
-  today: ISODateString,
-  seasonalModel: 'GROWING_DORMANT' | 'YEAR_ROUND',
-): 'GROWING' | 'DORMANT' {
-  if (seasonalModel === 'YEAR_ROUND') {
-    return 'GROWING';
-  }
-
-  const month = Number(today.slice(5, 7));
-  return month >= 3 && month <= 10 ? 'GROWING' : 'DORMANT';
 }
 
 function adjustmentForSeason(

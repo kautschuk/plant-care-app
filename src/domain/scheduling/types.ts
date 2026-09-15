@@ -75,6 +75,7 @@ export interface KnowledgeEntry {
   readonly seasonalModel: SeasonalModel;
   readonly fertilizationApplicable: boolean;
   readonly fertilizerModes: readonly FertilizerMode[];
+  seasonFor(climate: Climate, today: ISODateString): Season;
   intervalFor(
     climate: Climate,
     season: Season,
@@ -97,6 +98,7 @@ export interface ScheduleCalculation {
 }
 
 export interface PlannerProjection extends ScheduleProjection {
+  guidanceLevel: TaxonomicLevel;
   tasks: readonly PlannerTask[];
 }
 
