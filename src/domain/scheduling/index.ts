@@ -5,6 +5,8 @@ export {
   recalculateForLocationChange,
 } from './engine';
 
+export { validateISODate } from './types';
+
 export type {
   ApplyScheduleActionInput,
   CareEventDescriptor,

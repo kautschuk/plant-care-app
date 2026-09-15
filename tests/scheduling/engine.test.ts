@@ -5,6 +5,7 @@ import {
   initializeSchedule as publicInitializeSchedule,
   projectSchedule as publicProjectSchedule,
   recalculateForLocationChange as publicRecalculateForLocationChange,
+  validateISODate as publicValidateISODate,
 } from '../../src/domain/scheduling/index';
 import {
   applyScheduleAction,
@@ -19,6 +20,7 @@ import {
 } from '../../src/domain/scheduling/knowledge';
 import type {
   CareScheduleState,
+  IntervalDays,
   ScheduleState,
   ScheduleAction,
 } from '../../src/domain/scheduling/types';
@@ -162,6 +164,31 @@ describe('scheduling engine contract', () => {
     expect(result.projection.nextDueDate).toBe('2026-09-17');
   });
 
+  it('initializes an independent long-term fertilizer schedule', () => {
+    const result = initializeSchedule({
+      today: date('2026-09-14'),
+      lastCompletedDate: date('2026-09-10'),
+      lastFertilizingDate: date('2026-08-15'),
+      knowledge: {
+        ...wateringKnowledge({
+          baseIntervalDays: 7,
+          fertilizerModes: ['LONG_TERM'],
+        }),
+        intervalFor: (_climate, _season, careType) =>
+          (careType === 'FERTILIZING' ? 30 : 7) as IntervalDays,
+      },
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.state.careSchedules.FERTILIZING).toMatchObject({
+      lastCompletedDate: '2026-08-15',
+      nextDueDate: '2026-09-14',
+    });
+    expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
+      result.projection.nextDueDate,
+    );
+  });
+
   it('rejects future today and last-completed dates at initialization', () => {
     expect(() =>
       initializeSchedule({
@@ -303,6 +330,13 @@ describe('scheduling engine contract', () => {
     );
   });
 
+  it('exposes the validated date constructor from the public barrel', () => {
+    expect(publicValidateISODate('2026-09-14')).toBe('2026-09-14');
+    expect(() => publicValidateISODate('2026-09-15', date('2026-09-14'))).toThrow(
+      'Date cannot be in the future',
+    );
+  });
+
   it('supports separate growing and dormant knowledge intervals', () => {
     const knowledge = growingDormantKnowledge({
       growingIntervalDays: 5,
@@ -331,9 +365,31 @@ describe('scheduling engine contract', () => {
       '2026-09-14',
     );
     expect(result.projection.nextDueDate).toBe('2026-09-21');
+    expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
+      result.projection.nextDueDate,
+    );
     expect(result.events).toEqual([
       { careType: 'WATERING', date: '2026-09-14' },
     ]);
+  });
+
+  it('keeps persisted due date aligned after feedback', () => {
+    for (const action of [
+      { type: 'FEEDBACK_EARLIER' as const },
+      { type: 'FEEDBACK_LATER' as const },
+    ]) {
+      const result = applyScheduleAction({
+        state: scheduleState({ learnedAdjustmentDays: 0 }),
+        action,
+        today: date('2026-09-14'),
+        knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+        climate: 'TEMPERATE',
+      });
+
+      expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
+        result.projection.nextDueDate,
+      );
+    }
   });
 
   it('adds one day for later feedback and subtracts one day until the one-day floor', () => {
@@ -402,11 +458,33 @@ describe('scheduling engine contract', () => {
     expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
       '2026-09-17',
     );
+    expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
+      result.projection.nextDueDate,
+    );
     expect(result.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
       model: 'YEAR_ROUND',
       days: 5,
     });
     expect(result.events).toBeUndefined();
+  });
+
+  it('postpones from the derived due date when persisted due date is stale', () => {
+    const result = applyScheduleAction({
+      state: scheduleState({
+        learnedAdjustmentDays: 0,
+        lastCompletedDate: '2026-09-10',
+        nextDueDate: '2026-09-14',
+      }),
+      action: { type: 'POSTPONE', days: 3 },
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.state.careSchedules.WATERING?.nextDueDate).toBe('2026-09-20');
+    expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
+      result.projection.nextDueDate,
+    );
   });
 
   it('allows a maximum postponement to double the subsequent effective interval', () => {
@@ -443,6 +521,9 @@ describe('scheduling engine contract', () => {
     });
 
     expect(result.projection.nextDueDate).toBe('2026-09-13');
+    expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
+      result.projection.nextDueDate,
+    );
   });
 
   it('reset location change clears all seasonal adjustments', () => {
@@ -517,6 +598,90 @@ describe('scheduling engine contract', () => {
       { careType: 'WATERING', date: '2026-09-14' },
       { careType: 'FERTILIZING', date: '2026-09-14' },
     ]);
+  });
+
+  it('keeps long-term fertilizer due independently from watering', () => {
+    const knowledge = wateringKnowledge({
+      baseIntervalDays: 7,
+      fertilizerModes: ['LONG_TERM'],
+    });
+    const state: ScheduleState = {
+      careSchedules: {
+        WATERING: scheduleState({
+          learnedAdjustmentDays: 0,
+          lastCompletedDate: '2026-09-14',
+          nextDueDate: '2026-09-21',
+        }).careSchedules.WATERING!,
+        FERTILIZING: {
+          lastCompletedDate: date('2026-08-15'),
+          nextDueDate: date('2026-09-14'),
+          learnedAdjustments: { model: 'YEAR_ROUND', days: 0 },
+        },
+      },
+    };
+
+    const watering = projectSchedule({
+      today: date('2026-09-14'),
+      state,
+      knowledge,
+      climate: 'TEMPERATE',
+      careType: 'WATERING',
+    });
+    const fertilizer = projectSchedule({
+      today: date('2026-09-14'),
+      state,
+      knowledge: {
+        ...knowledge,
+        intervalFor: (_climate, _season, careType) =>
+          (careType === 'FERTILIZING' ? 30 : 7) as IntervalDays,
+      },
+      climate: 'TEMPERATE',
+      careType: 'FERTILIZING',
+    });
+
+    expect(watering.status).toBe('NOT_DUE');
+    expect(fertilizer.status).toBe('DUE_TODAY');
+    expect(fertilizer.tasks).toEqual([
+      { careType: 'FERTILIZING', fertilizerMode: 'LONG_TERM' },
+    ]);
+  });
+
+  it('completes long-term fertilizer as its own care event and schedule', () => {
+    const result = applyScheduleAction({
+      state: {
+        careSchedules: {
+          WATERING: scheduleState({ learnedAdjustmentDays: 0 }).careSchedules
+            .WATERING!,
+          FERTILIZING: {
+            lastCompletedDate: date('2026-08-14'),
+            nextDueDate: date('2026-09-14'),
+            learnedAdjustments: { model: 'YEAR_ROUND', days: 0 },
+          },
+        },
+      },
+      action: { type: 'COMPLETE', careType: 'FERTILIZING' },
+      today: date('2026-09-14'),
+      knowledge: {
+        ...wateringKnowledge({
+          baseIntervalDays: 7,
+          fertilizerModes: ['LONG_TERM'],
+        }),
+        intervalFor: (_climate, _season, careType) =>
+          (careType === 'FERTILIZING' ? 30 : 7) as IntervalDays,
+      },
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.events).toEqual([
+      { careType: 'FERTILIZING', date: '2026-09-14' },
+    ]);
+    expect(result.state.careSchedules.FERTILIZING?.lastCompletedDate).toBe(
+      '2026-09-14',
+    );
+    expect(result.state.careSchedules.FERTILIZING?.nextDueDate).toBe(
+      result.projection.nextDueDate,
+    );
+    expect(result.projection.nextDueDate).toBe('2026-10-14');
   });
 
   it('rejects actions for archived schedules with a typed domain error', () => {

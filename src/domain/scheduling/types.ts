@@ -128,6 +128,7 @@ export interface CareEventDescriptor {
 export interface InitializeScheduleInput {
   today: ISODateString;
   lastCompletedDate: ISODateString;
+  lastFertilizingDate?: ISODateString;
   knowledge: KnowledgeEntry;
   climate: Climate;
   careType?: CareType;

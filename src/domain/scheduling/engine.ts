@@ -37,21 +37,51 @@ export function initializeSchedule(
     nextDueDate: lastCompletedDate,
     learnedAdjustments,
   };
-  const state: ScheduleState = { careSchedules: { [careType]: schedule } };
+  const careSchedules: Partial<Record<CareType, CareScheduleState>> = {
+    [careType]: schedule,
+  };
+  if (
+    careType === 'WATERING' &&
+    input.knowledge.fertilizerModes.includes('LONG_TERM')
+  ) {
+    const lastFertilizingDate = validateISODate(
+      input.lastFertilizingDate ?? input.lastCompletedDate,
+      today,
+    );
+    careSchedules.FERTILIZING = {
+      lastCompletedDate: lastFertilizingDate,
+      nextDueDate: lastFertilizingDate,
+      learnedAdjustments: initialAdjustments(input.knowledge.seasonalModel),
+    };
+  }
+  const state: ScheduleState = { careSchedules };
+  const initializedState = Object.keys(careSchedules).reduce(
+    (currentState, enabledCareType) => {
+      const enabledType = enabledCareType as CareType;
+      const enabledProjection = projectSchedule({
+        today,
+        state: currentState,
+        knowledge: input.knowledge,
+        climate: input.climate,
+        careType: enabledType,
+      });
+      return replaceSchedule(currentState, enabledType, {
+        ...currentState.careSchedules[enabledType]!,
+        nextDueDate: enabledProjection.nextDueDate,
+      });
+    },
+    state,
+  );
   const projection = projectSchedule({
     today,
-    state,
+    state: initializedState,
     knowledge: input.knowledge,
     climate: input.climate,
     careType,
   });
 
   return {
-    state: {
-      careSchedules: {
-        [careType]: { ...schedule, nextDueDate: projection.nextDueDate },
-      },
-    },
+    state: initializedState,
     projection,
   };
 }
@@ -158,7 +188,10 @@ export function applyScheduleAction(
       currentProjection.activeSeason,
       currentAdjustment + input.action.days,
     );
-    const nextDueDate = addDays(schedule.nextDueDate, input.action.days);
+    const nextDueDate = addDays(
+      currentProjection.nextDueDate,
+      input.action.days,
+    );
     const state = replaceSchedule(input.state, careType, {
       ...schedule,
       nextDueDate,
@@ -245,9 +278,14 @@ function calculationFor(
   input: ProjectScheduleInput,
   careType: CareType,
 ): ScheduleCalculation {
+  const projection = projectSchedule({ ...input, state, careType });
+  const persistedState = replaceSchedule(state, careType, {
+    ...state.careSchedules[careType]!,
+    nextDueDate: projection.nextDueDate,
+  });
   return {
-    state,
-    projection: projectSchedule({ ...input, state, careType }),
+    state: persistedState,
+    projection,
   };
 }
 
