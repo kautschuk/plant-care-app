@@ -11,11 +11,19 @@ import type {
   ScheduleProjection,
   ScheduleState,
   ScheduleCalculation,
+  SchedulingDomainError,
 } from './types';
 import { validateISODate } from './types';
 
-const NOT_IMPLEMENTED =
-  'Scheduling behavior is implemented in a later engine task';
+export class SchedulingDomainException extends Error {
+  readonly code: SchedulingDomainError['code'];
+
+  constructor(error: SchedulingDomainError) {
+    super(error.message);
+    this.name = 'SchedulingDomainException';
+    this.code = error.code;
+  }
+}
 
 export function initializeSchedule(
   input: InitializeScheduleInput,
@@ -90,15 +98,165 @@ export function projectSchedule(
 }
 
 export function applyScheduleAction(
-  _input: ApplyScheduleActionInput,
+  input: ApplyScheduleActionInput,
 ): ScheduleCalculation {
-  throw new Error(NOT_IMPLEMENTED);
+  if (input.state.archived) {
+    throw new SchedulingDomainException({
+      code: 'ARCHIVED_SCHEDULE',
+      message: 'Archived schedules cannot accept actions',
+    });
+  }
+
+  const careType = input.action.careType ?? 'WATERING';
+  const schedule = input.state.careSchedules[careType];
+  if (!schedule) {
+    throw new Error(`No ${careType} schedule is enabled`);
+  }
+
+  const today = validateISODate(input.today);
+  const currentProjection = projectSchedule({ ...input, careType });
+  const currentAdjustment = adjustmentForSeason(
+    schedule.learnedAdjustments,
+    currentProjection.activeSeason,
+  );
+
+  if (input.action.type === 'POSTPONE') {
+    if (
+      !Number.isInteger(input.action.days) ||
+      input.action.days <= 0 ||
+      input.action.days > currentProjection.effectiveIntervalDays
+    ) {
+      return {
+        state: input.state,
+        projection: currentProjection,
+        error: {
+          code: 'INVALID_POSTPONEMENT',
+          message: `Postponement must be a positive integer no greater than ${currentProjection.effectiveIntervalDays} days`,
+        },
+      };
+    }
+
+    const learnedAdjustments = updateAdjustment(
+      schedule.learnedAdjustments,
+      currentProjection.activeSeason,
+      currentAdjustment + input.action.days,
+    );
+    const nextDueDate = addDays(schedule.nextDueDate, input.action.days);
+    const state = replaceSchedule(input.state, careType, {
+      ...schedule,
+      nextDueDate,
+      learnedAdjustments,
+    });
+
+    return calculationFor(state, input, careType);
+  }
+
+  if (
+    input.action.type === 'FEEDBACK_EARLIER' ||
+    input.action.type === 'FEEDBACK_LATER'
+  ) {
+    const requestedAdjustment =
+      currentAdjustment + (input.action.type === 'FEEDBACK_LATER' ? 1 : -1);
+    const minimumAdjustment = 1 - currentProjection.baseIntervalDays;
+    const learnedAdjustments = updateAdjustment(
+      schedule.learnedAdjustments,
+      currentProjection.activeSeason,
+      Math.max(minimumAdjustment, requestedAdjustment),
+    );
+    const state = replaceSchedule(input.state, careType, {
+      ...schedule,
+      learnedAdjustments,
+    });
+
+    return calculationFor(state, input, careType);
+  }
+
+  const completedDate = validateISODate(
+    input.action.completedDate ?? today,
+    today,
+  );
+  const state = replaceSchedule(input.state, careType, {
+    ...schedule,
+    lastCompletedDate: completedDate,
+    nextDueDate: completedDate,
+  });
+  const calculation = calculationFor(state, input, careType);
+  const events = [{ careType, date: completedDate }];
+  const fertilizerMode = input.knowledge.fertilizerModes.find(
+    (mode) => mode !== 'NONE',
+  );
+
+  return {
+    ...calculation,
+    events:
+      careType === 'WATERING' && fertilizerMode === 'LIQUID'
+        ? [...events, { careType: 'FERTILIZING' as const, date: completedDate }]
+        : events,
+  };
 }
 
 export function recalculateForLocationChange(
-  _input: LocationChangeInput,
+  input: LocationChangeInput,
 ): ScheduleCalculation {
-  throw new Error(NOT_IMPLEMENTED);
+  if (input.state.archived) {
+    throw new SchedulingDomainException({
+      code: 'ARCHIVED_SCHEDULE',
+      message: 'Archived schedules cannot be recalculated',
+    });
+  }
+
+  const careType = input.careType ?? 'WATERING';
+  const schedule = input.state.careSchedules[careType];
+  if (!schedule) {
+    throw new Error(`No ${careType} schedule is enabled`);
+  }
+  const learnedAdjustments =
+    input.mode === 'RESET_TO_DEFAULTS'
+      ? initialAdjustments(input.knowledge.seasonalModel)
+      : schedule.learnedAdjustments;
+  const state = replaceSchedule(input.state, careType, {
+    ...schedule,
+    learnedAdjustments,
+    nextDueDate: schedule.lastCompletedDate,
+  });
+
+  return calculationFor(state, { ...input, climate: input.newClimate }, careType);
+}
+
+function calculationFor(
+  state: ScheduleState,
+  input: ProjectScheduleInput,
+  careType: CareType,
+): ScheduleCalculation {
+  return {
+    state,
+    projection: projectSchedule({ ...input, state, careType }),
+  };
+}
+
+function replaceSchedule(
+  state: ScheduleState,
+  careType: CareType,
+  schedule: CareScheduleState,
+): ScheduleState {
+  return {
+    ...state,
+    careSchedules: { ...state.careSchedules, [careType]: schedule },
+  };
+}
+
+function updateAdjustment(
+  adjustments: LearnedAdjustments,
+  season: 'GROWING' | 'DORMANT',
+  days: number,
+): LearnedAdjustments {
+  if (adjustments.model === 'YEAR_ROUND') {
+    return { model: 'YEAR_ROUND', days };
+  }
+
+  return season === 'GROWING'
+    ? { ...adjustments, growingDays: days }
+    : { ...adjustments, dormantDays: days };
 }
 
 function initialAdjustments(

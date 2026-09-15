@@ -49,6 +49,15 @@ export type ScheduleAction =
   | { type: 'FEEDBACK_EARLIER'; careType?: CareType }
   | { type: 'FEEDBACK_LATER'; careType?: CareType };
 
+export type SchedulingErrorCode =
+  | 'ARCHIVED_SCHEDULE'
+  | 'INVALID_POSTPONEMENT';
+
+export interface SchedulingDomainError {
+  readonly code: SchedulingErrorCode;
+  readonly message: string;
+}
+
 export type LearnedAdjustments =
   | { readonly model: 'YEAR_ROUND'; readonly days: number }
   | {
@@ -66,6 +75,7 @@ export interface CareScheduleState {
 
 export interface ScheduleState {
   readonly careSchedules: Partial<Record<CareType, CareScheduleState>>;
+  readonly archived?: boolean;
 }
 
 export interface KnowledgeEntry {
@@ -93,8 +103,9 @@ export interface ScheduleProjection {
 
 export interface ScheduleCalculation {
   state: ScheduleState;
-  projection: ScheduleProjection;
+  projection: PlannerProjection;
   events?: readonly CareEventDescriptor[];
+  error?: SchedulingDomainError;
 }
 
 export interface PlannerProjection extends ScheduleProjection {

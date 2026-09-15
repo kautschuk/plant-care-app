@@ -4,6 +4,7 @@ import {
   applyScheduleAction,
   initializeSchedule,
   projectSchedule,
+  recalculateForLocationChange,
 } from '../../src/domain/scheduling/engine';
 import {
   growingDormantKnowledge,
@@ -296,11 +297,238 @@ describe('scheduling engine contract', () => {
     expect(knowledge.intervalFor('TEMPERATE', 'GROWING', 'WATERING')).toBe(5);
     expect(knowledge.intervalFor('TEMPERATE', 'DORMANT', 'WATERING')).toBe(12);
   });
+
+  it('completes from the actual completion date', () => {
+    const result = applyScheduleAction({
+      state: scheduleState({
+        learnedAdjustmentDays: 0,
+        lastCompletedDate: '2026-09-03',
+        nextDueDate: '2026-09-10',
+      }),
+      action: { type: 'COMPLETE', completedDate: date('2026-09-14') },
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.state.careSchedules.WATERING?.lastCompletedDate).toBe(
+      '2026-09-14',
+    );
+    expect(result.projection.nextDueDate).toBe('2026-09-21');
+    expect(result.events).toEqual([
+      { careType: 'WATERING', date: '2026-09-14' },
+    ]);
+  });
+
+  it('adds one day for later feedback and subtracts one day until the one-day floor', () => {
+    const knowledge = wateringKnowledge({ baseIntervalDays: 7 });
+    const later = applyScheduleAction({
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      action: { type: 'FEEDBACK_LATER' },
+      today: date('2026-09-14'),
+      knowledge,
+      climate: 'TEMPERATE',
+    });
+    const earlier = applyScheduleAction({
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      action: { type: 'FEEDBACK_EARLIER' },
+      today: date('2026-09-14'),
+      knowledge,
+      climate: 'TEMPERATE',
+    });
+    const atFloor = applyScheduleAction({
+      state: scheduleState({ learnedAdjustmentDays: -6 }),
+      action: { type: 'FEEDBACK_EARLIER' },
+      today: date('2026-09-14'),
+      knowledge,
+      climate: 'TEMPERATE',
+    });
+
+    expect(later.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'YEAR_ROUND',
+      days: 1,
+    });
+    expect(earlier.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'YEAR_ROUND',
+      days: -1,
+    });
+    expect(atFloor.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'YEAR_ROUND',
+      days: -6,
+    });
+  });
+
+  it('caps postponement at the current effective interval', () => {
+    const result = applyScheduleAction({
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      action: { type: 'POSTPONE', days: 8 },
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(result).toMatchObject({ error: { code: 'INVALID_POSTPONEMENT' } });
+  });
+
+  it('applies postponement to both next due date and learned adjustment', () => {
+    const result = applyScheduleAction({
+      state: scheduleState({
+        learnedAdjustmentDays: 2,
+        lastCompletedDate: '2026-09-05',
+        nextDueDate: '2026-09-14',
+      }),
+      action: { type: 'POSTPONE', days: 3 },
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
+      '2026-09-17',
+    );
+    expect(result.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'YEAR_ROUND',
+      days: 5,
+    });
+    expect(result.events).toBeUndefined();
+  });
+
+  it('allows a maximum postponement to double the subsequent effective interval', () => {
+    const result = applyScheduleAction({
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      action: { type: 'POSTPONE', days: 7 },
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'YEAR_ROUND',
+      days: 7,
+    });
+    expect(result.projection.effectiveIntervalDays).toBe(14);
+  });
+
+  it('reanchors location changes from last completed date', () => {
+    const result = recalculateForLocationChange({
+      state: scheduleState({
+        learnedAdjustmentDays: 0,
+        lastCompletedDate: '2026-09-10',
+        nextDueDate: '2026-09-20',
+      }),
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({
+        baseIntervalDays: 7,
+        climateIntervals: { TROPICAL: 3 },
+      }),
+      climate: 'TEMPERATE',
+      newClimate: 'TROPICAL',
+      mode: 'PRESERVE_LEARNED_STATE',
+    });
+
+    expect(result.projection.nextDueDate).toBe('2026-09-13');
+  });
+
+  it('reset location change clears all seasonal adjustments', () => {
+    const result = recalculateForLocationChange({
+      state: seasonalScheduleState({
+        growingDays: 2,
+        dormantDays: 4,
+        lastCompletedDate: '2026-09-10',
+      }),
+      today: date('2026-09-14'),
+      knowledge: growingDormantKnowledge({
+        growingIntervalDays: 7,
+        dormantIntervalDays: 12,
+      }),
+      climate: 'TEMPERATE',
+      newClimate: 'TROPICAL',
+      mode: 'RESET_TO_DEFAULTS',
+    });
+
+    expect(result.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'GROWING_DORMANT',
+      growingDays: 0,
+      dormantDays: 0,
+    });
+  });
+
+  it('preserve location change retains applicable learned adjustment', () => {
+    const result = recalculateForLocationChange({
+      state: seasonalScheduleState({
+        growingDays: 2,
+        dormantDays: 4,
+        lastCompletedDate: '2026-09-10',
+      }),
+      today: date('2026-09-14'),
+      knowledge: growingDormantKnowledge({
+        growingIntervalDays: 7,
+        dormantIntervalDays: 12,
+      }),
+      climate: 'TEMPERATE',
+      newClimate: 'TROPICAL',
+      mode: 'PRESERVE_LEARNED_STATE',
+    });
+
+    expect(result.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'GROWING_DORMANT',
+      growingDays: 2,
+      dormantDays: 4,
+    });
+    expect(result.projection.effectiveIntervalDays).toBe(9);
+  });
+
+  it('completes liquid fertilizer as separate care events with one planner task', () => {
+    const result = applyScheduleAction({
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      action: { type: 'COMPLETE', completedDate: date('2026-09-14') },
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({
+        baseIntervalDays: 7,
+        fertilizerModes: ['LIQUID'],
+      }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.projection.tasks).toEqual([
+      {
+        careType: 'WATERING',
+        fertilizerMode: 'LIQUID',
+        combinedWithWatering: true,
+      },
+    ]);
+    expect(result.events).toEqual([
+      { careType: 'WATERING', date: '2026-09-14' },
+      { careType: 'FERTILIZING', date: '2026-09-14' },
+    ]);
+  });
+
+  it('rejects actions for archived schedules with a typed domain error', () => {
+    expect(() =>
+      applyScheduleAction({
+        state: {
+          ...scheduleState({ learnedAdjustmentDays: 0 }),
+          archived: true,
+        },
+        action: { type: 'COMPLETE' },
+        today: date('2026-09-14'),
+        knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+        climate: 'TEMPERATE',
+      }),
+    ).toThrowError(expect.objectContaining({ code: 'ARCHIVED_SCHEDULE' }));
+  });
+
+  it('standalone journal facts are not schedule actions', () => {
+    expect(['COMPLETE', 'POSTPONE', 'FEEDBACK_EARLIER', 'FEEDBACK_LATER']).toEqual(
+      expect.arrayContaining(['COMPLETE', 'POSTPONE', 'FEEDBACK_EARLIER', 'FEEDBACK_LATER']),
+    );
+  });
 });
 
 function scheduleState(overrides: {
   learnedAdjustmentDays: number;
   lastCompletedDate?: string;
+  nextDueDate?: string;
 }): ScheduleState {
   const state: CareScheduleState = {
     lastCompletedDate: date(overrides.lastCompletedDate ?? '2026-09-10'),
@@ -308,7 +536,7 @@ function scheduleState(overrides: {
       model: 'YEAR_ROUND',
       days: overrides.learnedAdjustmentDays,
     },
-    nextDueDate: date('2026-09-17'),
+    nextDueDate: date(overrides.nextDueDate ?? '2026-09-17'),
   };
 
   return {
