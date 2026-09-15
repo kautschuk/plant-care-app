@@ -660,12 +660,12 @@ describe('scheduling engine contract', () => {
   });
 
   it('produces the same projection for the same input snapshot', () => {
-    const input = {
+    const input = deepFreeze({
       today: date('2026-09-14'),
       state: scheduleState({ learnedAdjustmentDays: 2 }),
       knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
       climate: 'TEMPERATE' as const,
-    };
+    });
     const inputBeforeProjection = {
       ...input,
       state: structuredClone(input.state),
@@ -768,4 +768,21 @@ function seasonalScheduleState(overrides: {
 
 function date(value: string) {
   return validateISODate(value);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    !Object.isFrozen(value)
+  ) {
+    Object.freeze(value);
+    for (const nestedValue of Object.values(
+      value as Record<string, unknown>,
+    )) {
+      deepFreeze(nestedValue);
+    }
+  }
+
+  return value;
 }

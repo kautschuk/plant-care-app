@@ -19,6 +19,7 @@
 - `git diff --check`
   - Passed with no output.
 
+
 ## Concerns
 
 None.
@@ -33,3 +34,18 @@ None.
 - `npm test -- --run tests/scheduling/engine.test.ts`
   - `Test Files 1 passed (1)`
   - `Tests 37 passed (37)`
+
+## Remaining Review Finding Repair
+
+- Deep-froze the complete repeatability-test input, including nested knowledge data, so the baseline cannot be changed by nested input mutation.
+- No scheduling engine behavior was changed.
+
+## Remaining Review Finding Validation
+
+- `npm test -- --run tests/scheduling/engine.test.ts`
+  - `Test Files 1 passed (1)`
+  - `Tests 37 passed (37)`
+- `npx tsc --noEmit`
+  - Passed with exit code 0 and no diagnostics.
+- `git diff --check`
+  - Passed with no output.
