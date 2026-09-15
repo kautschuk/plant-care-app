@@ -24,3 +24,18 @@
 ## Concerns
 
 - The public TypeScript `ScheduleAction` union already excludes journal facts; this guard protects the runtime boundary when malformed or casted objects enter the engine.
+
+## Follow-up Repair
+
+- Replaced the standalone journal runtime test's tautological state comparison with an independent snapshot of the watering schedule, including learned adjustments.
+- Kept the runtime `UNKNOWN_ACTION` guard unchanged and retained assertions for the typed error and absence of events.
+
+### Verification
+
+- `npm test -- --run tests/scheduling/engine.test.ts`
+  - `Test Files 1 passed (1)`
+  - `Tests 29 passed (29)`
+- `npx tsc --noEmit`
+  - Passed with exit code 0 and no diagnostics.
+- `git diff --check`
+  - Passed with no output.

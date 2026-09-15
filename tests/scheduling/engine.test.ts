@@ -521,6 +521,12 @@ describe('scheduling engine contract', () => {
 
   it('standalone journal facts are not schedule actions', () => {
     const state = scheduleState({ learnedAdjustmentDays: 0 });
+    const scheduleBefore = {
+      ...state.careSchedules.WATERING,
+      learnedAdjustments: {
+        ...state.careSchedules.WATERING?.learnedAdjustments,
+      },
+    };
     const result = applyScheduleAction({
       state,
       action: { type: 'JOURNAL_ENTRY' } as unknown as ScheduleAction,
@@ -531,12 +537,9 @@ describe('scheduling engine contract', () => {
 
     expect(result).toMatchObject({
       error: { code: 'UNKNOWN_ACTION' },
-      state,
     });
     expect(result.events).toBeUndefined();
-    expect(result.state.careSchedules.WATERING).toEqual(
-      state.careSchedules.WATERING,
-    );
+    expect(result.state.careSchedules.WATERING).toEqual(scheduleBefore);
   });
 });
 
