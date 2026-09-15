@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  applyScheduleAction as publicApplyScheduleAction,
+  initializeSchedule as publicInitializeSchedule,
+  projectSchedule as publicProjectSchedule,
+  recalculateForLocationChange as publicRecalculateForLocationChange,
+} from '../../src/domain/scheduling/index';
+import {
   applyScheduleAction,
   initializeSchedule,
   projectSchedule,
@@ -19,6 +25,15 @@ import type {
 import { validateISODate } from '../../src/domain/scheduling/types';
 
 describe('scheduling engine contract', () => {
+  it('exposes the stable scheduling functions from the public barrel', () => {
+    expect(publicInitializeSchedule).toBe(initializeSchedule);
+    expect(publicProjectSchedule).toBe(projectSchedule);
+    expect(publicApplyScheduleAction).toBe(applyScheduleAction);
+    expect(publicRecalculateForLocationChange).toBe(
+      recalculateForLocationChange,
+    );
+  });
+
   it('derives a seven-day schedule from September 10 to September 17', () => {
     const result = projectSchedule({
       today: date('2026-09-14'),
