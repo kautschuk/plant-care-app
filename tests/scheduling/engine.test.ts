@@ -519,6 +519,156 @@ describe('scheduling engine contract', () => {
     ).toThrowError(expect.objectContaining({ code: 'ARCHIVED_SCHEDULE' }));
   });
 
+  it('never projects an effective interval below one day', () => {
+    for (const learnedAdjustmentDays of [-20, -7, -6, -1, 0, 4]) {
+      const result = projectSchedule({
+        today: date('2026-09-14'),
+        state: scheduleState({ learnedAdjustmentDays }),
+        knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+        climate: 'TEMPERATE',
+      });
+
+      expect(result.effectiveIntervalDays).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('rejects every postponement above the current effective interval', () => {
+    for (const learnedAdjustmentDays of [-6, 0, 3]) {
+      const currentInterval = 7 + learnedAdjustmentDays;
+      const result = applyScheduleAction({
+        state: scheduleState({ learnedAdjustmentDays }),
+        action: { type: 'POSTPONE', days: currentInterval + 1 },
+        today: date('2026-09-14'),
+        knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+        climate: 'TEMPERATE',
+      });
+
+      expect(result.error?.code).toBe('INVALID_POSTPONEMENT');
+      expect(result.events).toBeUndefined();
+    }
+  });
+
+  it('anchors completion projections to the actual completion date', () => {
+    for (const completedDate of ['2026-09-11', '2026-09-14']) {
+      const result = applyScheduleAction({
+        state: scheduleState({
+          learnedAdjustmentDays: 0,
+          lastCompletedDate: '2026-09-03',
+          nextDueDate: '2026-09-10',
+        }),
+        action: { type: 'COMPLETE', completedDate: date(completedDate) },
+        today: date('2026-09-14'),
+        knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+        climate: 'TEMPERATE',
+      });
+
+      expect(result.state.careSchedules.WATERING?.lastCompletedDate).toBe(
+        completedDate,
+      );
+      expect(result.projection.nextDueDate).toBe(
+        completedDate === '2026-09-11' ? '2026-09-18' : '2026-09-21',
+      );
+    }
+  });
+
+  it('never emits a care event for a valid postponement', () => {
+    for (const days of [1, 3, 7]) {
+      const result = applyScheduleAction({
+        state: scheduleState({ learnedAdjustmentDays: 0 }),
+        action: { type: 'POSTPONE', days },
+        today: date('2026-09-14'),
+        knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+        climate: 'TEMPERATE',
+      });
+
+      expect(result.events).toBeUndefined();
+    }
+  });
+
+  it('ignores journal edits and deletions when projecting schedule state', () => {
+    const stateWithJournal = {
+      ...scheduleState({ learnedAdjustmentDays: 0 }),
+      journalEntries: [
+        { id: 'entry-1', action: 'EDIT', date: '2026-09-14' },
+        { id: 'entry-2', action: 'DELETE', date: '2026-09-13' },
+      ],
+    } as ScheduleState & { journalEntries: readonly unknown[] };
+
+    const baseline = projectSchedule({
+      today: date('2026-09-14'),
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+    const withJournal = projectSchedule({
+      today: date('2026-09-14'),
+      state: stateWithJournal,
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(withJournal).toEqual(baseline);
+  });
+
+  it('rejects every schedule action for archived state', () => {
+    for (const action of [
+      { type: 'COMPLETE' as const },
+      { type: 'POSTPONE' as const, days: 1 },
+      { type: 'FEEDBACK_EARLIER' as const },
+      { type: 'FEEDBACK_LATER' as const },
+    ]) {
+      expect(() =>
+        applyScheduleAction({
+          state: {
+            ...scheduleState({ learnedAdjustmentDays: 0 }),
+            archived: true,
+          },
+          action,
+          today: date('2026-09-14'),
+          knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+          climate: 'TEMPERATE',
+        }),
+      ).toThrowError(expect.objectContaining({ code: 'ARCHIVED_SCHEDULE' }));
+    }
+  });
+
+  it('produces the same projection for the same input snapshot', () => {
+    const input = {
+      today: date('2026-09-14'),
+      state: scheduleState({ learnedAdjustmentDays: 2 }),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE' as const,
+    };
+
+    const projections = Array.from({ length: 5 }, () => projectSchedule(input));
+
+    expect(projections).toEqual([
+      projections[0],
+      projections[0],
+      projections[0],
+      projections[0],
+      projections[0],
+    ]);
+  });
+
+  it('keeps year-round state adjustment shape free of dormant fields', () => {
+    const result = applyScheduleAction({
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      action: { type: 'FEEDBACK_LATER' },
+      today: date('2026-09-14'),
+      knowledge: yearRoundKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(result.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'YEAR_ROUND',
+      days: 1,
+    });
+    expect(
+      result.state.careSchedules.WATERING?.learnedAdjustments,
+    ).not.toHaveProperty('dormantDays');
+  });
+
   it('standalone journal facts are not schedule actions', () => {
     const state = scheduleState({ learnedAdjustmentDays: 0 });
     const scheduleBefore = {
