@@ -13,17 +13,20 @@ import type {
   CareScheduleState,
   ScheduleState,
 } from '../../src/domain/scheduling/types';
+import { validateISODate } from '../../src/domain/scheduling/types';
 
 describe('scheduling engine contract', () => {
   it('initializes next due from the user-provided last-care date', () => {
     const result = initializeSchedule({
-      today: '2026-09-14',
-      lastCompletedDate: '2026-09-10',
+      today: date('2026-09-14'),
+      lastCompletedDate: date('2026-09-10'),
       knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
       climate: 'TEMPERATE',
     });
 
-    expect(result.state.lastCompletedDate).toBe('2026-09-10');
+    expect(result.state.careSchedules.WATERING?.lastCompletedDate).toBe(
+      '2026-09-10',
+    );
     expect(result.projection.nextDueDate).toBe('2026-09-17');
   });
 
@@ -32,12 +35,14 @@ describe('scheduling engine contract', () => {
     const result = applyScheduleAction({
       state,
       action: { type: 'FEEDBACK_EARLIER' },
-      today: '2026-09-14',
+      today: date('2026-09-14'),
       knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
       climate: 'TEMPERATE',
     });
 
-    expect(result.state.learnedAdjustmentDays).toBe(-6);
+    expect(
+      result.state.careSchedules.WATERING?.learnedAdjustments,
+    ).toEqual({ model: 'YEAR_ROUND', days: -6 });
     expect(result.projection.effectiveIntervalDays).toBe(1);
   });
 
@@ -46,6 +51,62 @@ describe('scheduling engine contract', () => {
 
     expect(knowledge.seasonalModel).toBe('YEAR_ROUND');
     expect(knowledge.intervalFor('TEMPERATE', 'GROWING', 'WATERING')).toBe(7);
+  });
+
+  it('stores schedule facts only under enabled care types', () => {
+    const state = scheduleState({ learnedAdjustmentDays: 0 });
+
+    expect(Object.keys(state)).toEqual(['careSchedules']);
+    expect(state.careSchedules.WATERING?.lastCompletedDate).toBe(
+      '2026-09-10',
+    );
+  });
+
+  it('looks up a climate-specific interval when one is available', () => {
+    const knowledge = wateringKnowledge({
+      baseIntervalDays: 7,
+      climateIntervals: { TROPICAL: 3 },
+    });
+
+    expect(knowledge.intervalFor('TROPICAL', 'GROWING', 'WATERING')).toBe(3);
+    expect(knowledge.intervalFor('TEMPERATE', 'GROWING', 'WATERING')).toBe(7);
+  });
+
+  it('declares fertilizer applicability from its supported modes', () => {
+    const withoutFertilizer = wateringKnowledge({
+      baseIntervalDays: 7,
+      fertilizerModes: ['NONE'],
+    });
+    const withLiquidFertilizer = wateringKnowledge({
+      baseIntervalDays: 7,
+      fertilizerModes: ['LIQUID'],
+    });
+
+    expect(withoutFertilizer.fertilizationApplicable).toBe(false);
+    expect(withoutFertilizer.fertilizerModes).toEqual(['NONE']);
+    expect(withLiquidFertilizer.fertilizationApplicable).toBe(true);
+    expect(withLiquidFertilizer.fertilizerModes).toEqual(['LIQUID']);
+  });
+
+  it('rejects invalid knowledge intervals at the fixture boundary', () => {
+    expect(() => wateringKnowledge({ baseIntervalDays: 0 })).toThrow(
+      'Interval days must be a positive integer',
+    );
+    expect(() =>
+      growingDormantKnowledge({
+        growingIntervalDays: 5,
+        dormantIntervalDays: 1.5,
+      }),
+    ).toThrow('Interval days must be a positive integer');
+  });
+
+  it('rejects malformed and future dates at the date boundary', () => {
+    expect(() => validateISODate('2026-02-30')).toThrow(
+      'Date must be a valid ISO calendar date',
+    );
+    expect(() => validateISODate('2026-09-15', date('2026-09-14'))).toThrow(
+      'Date cannot be in the future',
+    );
   });
 
   it('supports separate growing and dormant knowledge intervals', () => {
@@ -62,13 +123,19 @@ describe('scheduling engine contract', () => {
 
 function scheduleState(overrides: { learnedAdjustmentDays: number }): ScheduleState {
   const state: CareScheduleState = {
-    lastCompletedDate: '2026-09-10',
-    learnedAdjustmentDays: overrides.learnedAdjustmentDays,
-    nextDueDate: '2026-09-17',
+    lastCompletedDate: date('2026-09-10'),
+    learnedAdjustments: {
+      model: 'YEAR_ROUND',
+      days: overrides.learnedAdjustmentDays,
+    },
+    nextDueDate: date('2026-09-17'),
   };
 
   return {
-    ...state,
     careSchedules: { WATERING: state },
   };
+}
+
+function date(value: string) {
+  return validateISODate(value);
 }

@@ -1,4 +1,6 @@
-export type ISODateString = `${number}-${number}-${number}`;
+export type ISODateString = string & {
+  readonly __isoDate: unique symbol;
+};
 
 export type IntervalDays = number & {
   readonly __intervalDays: unique symbol;
@@ -16,37 +18,63 @@ export type TaxonomicLevel = 'SPECIES' | 'GENUS';
 
 export type Climate = string;
 
+export function validateISODate(
+  value: string,
+  today?: ISODateString,
+): ISODateString {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error('Date must be a valid ISO calendar date');
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error('Date must be a valid ISO calendar date');
+  }
+
+  if (today && value > today) {
+    throw new Error('Date cannot be in the future');
+  }
+
+  return value as ISODateString;
+}
+
 export type ScheduleAction =
   | { type: 'COMPLETE'; completedDate?: ISODateString; careType?: CareType }
   | { type: 'POSTPONE'; days: number; careType?: CareType }
   | { type: 'FEEDBACK_EARLIER'; careType?: CareType }
   | { type: 'FEEDBACK_LATER'; careType?: CareType };
 
-export interface SeasonalAdjustments {
-  growing?: number;
-  dormant?: number;
-  yearRound?: number;
-}
+export type LearnedAdjustments =
+  | { readonly model: 'YEAR_ROUND'; readonly days: number }
+  | {
+      readonly model: 'GROWING_DORMANT';
+      readonly growingDays: number;
+      readonly dormantDays: number;
+    };
 
 export interface CareScheduleState {
-  lastCompletedDate: ISODateString;
-  nextDueDate: ISODateString;
-  learnedAdjustmentDays: number;
-  seasonalAdjustments?: SeasonalAdjustments;
-  adjustmentReason?: string;
+  readonly lastCompletedDate: ISODateString;
+  readonly nextDueDate: ISODateString;
+  readonly learnedAdjustments: LearnedAdjustments;
+  readonly adjustmentReason?: string;
 }
 
-export interface ScheduleState extends CareScheduleState {
-  careSchedules: Partial<Record<CareType, CareScheduleState>>;
+export interface ScheduleState {
+  readonly careSchedules: Partial<Record<CareType, CareScheduleState>>;
 }
 
 export interface KnowledgeEntry {
-  species?: string;
-  genus: string;
-  taxonomicLevel: TaxonomicLevel;
-  seasonalModel: SeasonalModel;
-  fertilizationApplicable: boolean;
-  fertilizerModes: readonly FertilizerMode[];
+  readonly species?: string;
+  readonly genus: string;
+  readonly taxonomicLevel: TaxonomicLevel;
+  readonly seasonalModel: SeasonalModel;
+  readonly fertilizationApplicable: boolean;
+  readonly fertilizerModes: readonly FertilizerMode[];
   intervalFor(
     climate: Climate,
     season: Season,

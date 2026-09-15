@@ -40,3 +40,25 @@
 
 - The focused suite is intentionally not green because Task 1 must not implement initialization or action behavior; Task 2 must replace the typed stubs before the full engine suite can pass.
 - `npm install` reported 10 moderate dependency audit findings in the existing dependency tree. No audit remediation was attempted because it is outside this task.
+
+## Repair Report (2026-09-15)
+
+### Files changed
+
+- `src/domain/scheduling/types.ts`: removed duplicated top-level schedule inheritance, made per-care-type state authoritative, added discriminated learned adjustments, added immutable knowledge fields, and added validated ISO-date input with explicit future-date rejection.
+- `src/domain/scheduling/knowledge.ts`: made fixture inputs readonly, added climate-specific interval lookup, preserved distinct growing/dormant intervals, forwarded fertilizer modes, and retained positive-integer interval validation.
+- `tests/scheduling/engine.test.ts`: added focused assertions for state shape, climate lookup, fertilizer applicability/modes, invalid intervals, date validity/future rejection, and seasonal fixtures; updated date and state construction to use the validated contract.
+
+### Tests and commands
+
+- `npm test -- --run tests/scheduling/engine.test.ts`: 9 tests collected; 7 passed and 2 failed only because `initializeSchedule` and `applyScheduleAction` remain intentional Task 2 placeholders. All repair-specific contract assertions pass.
+- `npx tsc --noEmit`: passed with no diagnostics.
+- `git diff --check`: passed with no whitespace errors.
+
+### Self-review
+
+- No Task 2 scheduling behavior was added.
+- `ScheduleState` no longer inherits duplicate authoritative fields; all persisted schedule facts live under `careSchedules`.
+- Date values now require the branded validator at the boundary, and the validator explicitly rejects future dates relative to a validated `today` value.
+- Year-round and growing/dormant knowledge models are represented without silently returning one interval for a declared seasonal model.
+- The remaining focused-test failures are expected scope concerns from the original Task 1 contract and are not repair regressions.

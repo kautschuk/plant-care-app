@@ -8,14 +8,16 @@ import type {
 } from './types';
 
 export interface WateringKnowledgeOptions {
-  baseIntervalDays: number;
-  seasonalModel?: 'GROWING_DORMANT' | 'YEAR_ROUND';
-  fertilizerModes?: readonly FertilizerMode[];
+  readonly baseIntervalDays: number;
+  readonly seasonalModel?: 'YEAR_ROUND';
+  readonly climateIntervals?: Readonly<Record<Climate, number>>;
+  readonly fertilizerModes?: readonly FertilizerMode[];
 }
 
 export interface GrowingDormantKnowledgeOptions {
-  growingIntervalDays: number;
-  dormantIntervalDays: number;
+  readonly growingIntervalDays: number;
+  readonly dormantIntervalDays: number;
+  readonly fertilizerModes?: readonly FertilizerMode[];
 }
 
 function positiveInterval(days: number): IntervalDays {
@@ -46,11 +48,16 @@ export function wateringKnowledge(
   options: WateringKnowledgeOptions,
 ): KnowledgeEntry {
   const interval = positiveInterval(options.baseIntervalDays);
-  const seasonalModel = options.seasonalModel ?? 'YEAR_ROUND';
+  const climateIntervals = Object.fromEntries(
+    Object.entries(options.climateIntervals ?? {}).map(([climate, days]) => [
+      climate,
+      positiveInterval(days),
+    ]),
+  ) as Readonly<Record<Climate, IntervalDays>>;
 
   return createKnowledge(
-    (_climate, _season, _careType) => interval,
-    seasonalModel,
+    (climate, _season, _careType) => climateIntervals[climate] ?? interval,
+    'YEAR_ROUND',
     options.fertilizerModes,
   );
 }
@@ -60,7 +67,6 @@ export function yearRoundKnowledge(
 ): KnowledgeEntry {
   return wateringKnowledge({
     ...options,
-    seasonalModel: 'YEAR_ROUND',
   });
 }
 
@@ -74,5 +80,6 @@ export function growingDormantKnowledge(
     (_climate, season, _careType) =>
       season === 'GROWING' ? growingInterval : dormantInterval,
     'GROWING_DORMANT',
+    options.fertilizerModes,
   );
 }
