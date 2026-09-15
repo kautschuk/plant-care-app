@@ -660,17 +660,22 @@ describe('scheduling engine contract', () => {
   });
 
   it('produces the same projection for the same input snapshot', () => {
-    const inputSnapshot = () => ({
+    const input = {
       today: date('2026-09-14'),
       state: scheduleState({ learnedAdjustmentDays: 2 }),
       knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
       climate: 'TEMPERATE' as const,
-    });
+    };
+    const inputBeforeProjection = {
+      ...input,
+      state: structuredClone(input.state),
+    };
 
     const projections = Array.from({ length: 5 }, () =>
-      projectSchedule(inputSnapshot()),
+      projectSchedule(input),
     );
 
+    expect(input).toEqual(inputBeforeProjection);
     expect(projections).toEqual([
       projections[0],
       projections[0],

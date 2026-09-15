@@ -14,9 +14,22 @@
   - `Tests 37 passed (37)`
 - `npx tsc --noEmit`
   - Passed with exit code 0 and no diagnostics.
+- `npx tsc --noEmit`
+  - Passed with exit code 0 and no diagnostics.
 - `git diff --check`
   - Passed with no output.
 
 ## Concerns
 
 None.
+
+## Follow-up Repair
+
+- The repeatability invariant now reuses one input object for every projection call and compares its post-call state with a pre-projection snapshot.
+- Repeated projections remain compared for equality, so the test detects both input mutation and non-deterministic outputs.
+
+## Follow-up Validation
+
+- `npm test -- --run tests/scheduling/engine.test.ts`
+  - `Test Files 1 passed (1)`
+  - `Tests 37 passed (37)`
