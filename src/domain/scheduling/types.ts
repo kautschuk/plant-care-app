@@ -51,7 +51,8 @@ export type ScheduleAction =
 
 export type SchedulingErrorCode =
   | 'ARCHIVED_SCHEDULE'
-  | 'INVALID_POSTPONEMENT';
+  | 'INVALID_POSTPONEMENT'
+  | 'UNKNOWN_ACTION';
 
 export interface SchedulingDomainError {
   readonly code: SchedulingErrorCode;

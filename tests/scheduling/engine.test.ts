@@ -14,6 +14,7 @@ import {
 import type {
   CareScheduleState,
   ScheduleState,
+  ScheduleAction,
 } from '../../src/domain/scheduling/types';
 import { validateISODate } from '../../src/domain/scheduling/types';
 
@@ -519,8 +520,22 @@ describe('scheduling engine contract', () => {
   });
 
   it('standalone journal facts are not schedule actions', () => {
-    expect(['COMPLETE', 'POSTPONE', 'FEEDBACK_EARLIER', 'FEEDBACK_LATER']).toEqual(
-      expect.arrayContaining(['COMPLETE', 'POSTPONE', 'FEEDBACK_EARLIER', 'FEEDBACK_LATER']),
+    const state = scheduleState({ learnedAdjustmentDays: 0 });
+    const result = applyScheduleAction({
+      state,
+      action: { type: 'JOURNAL_ENTRY' } as unknown as ScheduleAction,
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
+    expect(result).toMatchObject({
+      error: { code: 'UNKNOWN_ACTION' },
+      state,
+    });
+    expect(result.events).toBeUndefined();
+    expect(result.state.careSchedules.WATERING).toEqual(
+      state.careSchedules.WATERING,
     );
   });
 });

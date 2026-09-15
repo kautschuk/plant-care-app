@@ -119,6 +119,23 @@ export function applyScheduleAction(
     schedule.learnedAdjustments,
     currentProjection.activeSeason,
   );
+  const actionType = input.action.type as string;
+
+  if (
+    actionType !== 'COMPLETE' &&
+    actionType !== 'POSTPONE' &&
+    actionType !== 'FEEDBACK_EARLIER' &&
+    actionType !== 'FEEDBACK_LATER'
+  ) {
+    return {
+      state: input.state,
+      projection: currentProjection,
+      error: {
+        code: 'UNKNOWN_ACTION',
+        message: `Unsupported schedule action: ${actionType}`,
+      },
+    };
+  }
 
   if (input.action.type === 'POSTPONE') {
     if (
