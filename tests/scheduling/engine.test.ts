@@ -581,11 +581,19 @@ describe('scheduling engine contract', () => {
         climate: 'TEMPERATE',
       });
 
+      expect(result.error).toBeUndefined();
+      expect(result.state.careSchedules.WATERING?.nextDueDate).toBe(
+        date(`2026-09-${17 + days}`),
+      );
+      expect(result.state.careSchedules.WATERING?.learnedAdjustments).toEqual({
+        model: 'YEAR_ROUND',
+        days,
+      });
       expect(result.events).toBeUndefined();
     }
   });
 
-  it('ignores journal edits and deletions when projecting schedule state', () => {
+  it('ignores journal edits and deletions when scheduling state changes', () => {
     const stateWithJournal = {
       ...scheduleState({ learnedAdjustmentDays: 0 }),
       journalEntries: [
@@ -607,7 +615,26 @@ describe('scheduling engine contract', () => {
       climate: 'TEMPERATE',
     });
 
+    const baselineAction = applyScheduleAction({
+      state: scheduleState({ learnedAdjustmentDays: 0 }),
+      action: { type: 'FEEDBACK_LATER' },
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+    const journalAction = applyScheduleAction({
+      state: stateWithJournal,
+      action: { type: 'FEEDBACK_LATER' },
+      today: date('2026-09-14'),
+      knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
+      climate: 'TEMPERATE',
+    });
+
     expect(withJournal).toEqual(baseline);
+    expect(journalAction.state.careSchedules).toEqual(
+      baselineAction.state.careSchedules,
+    );
+    expect(journalAction.projection).toEqual(baselineAction.projection);
   });
 
   it('rejects every schedule action for archived state', () => {
@@ -633,14 +660,16 @@ describe('scheduling engine contract', () => {
   });
 
   it('produces the same projection for the same input snapshot', () => {
-    const input = {
+    const inputSnapshot = () => ({
       today: date('2026-09-14'),
       state: scheduleState({ learnedAdjustmentDays: 2 }),
       knowledge: wateringKnowledge({ baseIntervalDays: 7 }),
       climate: 'TEMPERATE' as const,
-    };
+    });
 
-    const projections = Array.from({ length: 5 }, () => projectSchedule(input));
+    const projections = Array.from({ length: 5 }, () =>
+      projectSchedule(inputSnapshot()),
+    );
 
     expect(projections).toEqual([
       projections[0],
