@@ -210,20 +210,23 @@ describe('climate resolution contracts', () => {
   });
 
   it('uses deterministic growing and dormant boundaries for temperate climates', () => {
-    const entry = allCatalogEntriesForTesting().find(
-      (candidate) => candidate.species === 'Monstera deliciosa',
+    const entries = allCatalogEntriesForTesting().filter(
+      (candidate) => candidate.seasonalModel === 'GROWING_DORMANT',
     );
-    expect(entry).toBeDefined();
-    if (!entry) return;
+    expect(entries).not.toHaveLength(0);
 
-    expect(entry.seasonFor('TEMPERATE', '2026-02-28' as never)).toBe('DORMANT');
-    expect(entry.seasonFor('TEMPERATE', '2026-03-01' as never)).toBe('GROWING');
-    expect(entry.seasonFor('TEMPERATE', '2026-10-31' as never)).toBe('GROWING');
-    expect(entry.seasonFor('TEMPERATE', '2026-11-01' as never)).toBe('DORMANT');
-    expect(entry.seasonFor('POLAR', '2026-04-30' as never)).toBe('DORMANT');
-    expect(entry.seasonFor('POLAR', '2026-05-01' as never)).toBe('GROWING');
-    expect(entry.seasonFor('POLAR', '2026-08-08' as never)).toBe('GROWING');
-    expect(entry.seasonFor('POLAR', '2026-09-01' as never)).toBe('DORMANT');
+    for (const entry of entries) {
+      expect(entry.seasonFor('TEMPERATE', '2026-02-28' as never)).toBe('DORMANT');
+      expect(entry.seasonFor('TEMPERATE', '2026-03-01' as never)).toBe('GROWING');
+      expect(entry.seasonFor('TEMPERATE', '2026-10-31' as never)).toBe('GROWING');
+      expect(entry.seasonFor('TEMPERATE', '2026-11-01' as never)).toBe('DORMANT');
+      expect(entry.seasonFor('POLAR', '2026-04-30' as never)).toBe('DORMANT');
+      expect(entry.seasonFor('POLAR', '2026-05-01' as never)).toBe('GROWING');
+      expect(entry.seasonFor('POLAR', '2026-08-08' as never)).toBe('GROWING');
+      expect(entry.seasonFor('POLAR', '2026-09-01' as never)).toBe('DORMANT');
+      expect(entry.seasonFor('TROPICAL', '2026-01-01' as never)).toBe('GROWING');
+      expect(entry.seasonFor('ARID', '2026-12-31' as never)).toBe('GROWING');
+    }
   });
 
   it('keeps year-round entries growing for every climate and date', () => {
@@ -239,6 +242,23 @@ describe('climate resolution contracts', () => {
     }
   });
 
+  it('keeps year-round interval selection stable across seasons', () => {
+    for (const entry of allCatalogEntriesForTesting()) {
+      if (entry.seasonalModel !== 'YEAR_ROUND') continue;
+
+      for (const climate of SUPPORTED_CLIMATES) {
+        expect(entry.intervalFor(climate, 'GROWING', 'WATERING')).toBe(
+          entry.intervalFor(climate, 'DORMANT', 'WATERING'),
+        );
+        if (entry.fertilizationApplicable) {
+          expect(entry.intervalFor(climate, 'GROWING', 'FERTILIZING')).toBe(
+            entry.intervalFor(climate, 'DORMANT', 'FERTILIZING'),
+          );
+        }
+      }
+    }
+  });
+
   it('provides positive intervals for each climate and applicable season', () => {
     for (const entry of allCatalogEntriesForTesting()) {
       for (const climate of SUPPORTED_CLIMATES) {
@@ -246,9 +266,13 @@ describe('climate resolution contracts', () => {
           ? ['GROWING'] as const
           : ['GROWING', 'DORMANT'] as const;
         for (const season of seasons) {
-          expect(entry.intervalFor(climate, season, 'WATERING')).toBeGreaterThan(0);
+          const wateringInterval = entry.intervalFor(climate, season, 'WATERING');
+          expect(wateringInterval).toBeGreaterThan(0);
+          expect(Number.isInteger(wateringInterval)).toBe(true);
           if (entry.fertilizationApplicable) {
-            expect(entry.intervalFor(climate, season, 'FERTILIZING')).toBeGreaterThan(0);
+            const fertilizingInterval = entry.intervalFor(climate, season, 'FERTILIZING');
+            expect(fertilizingInterval).toBeGreaterThan(0);
+            expect(Number.isInteger(fertilizingInterval)).toBe(true);
           }
         }
       }
