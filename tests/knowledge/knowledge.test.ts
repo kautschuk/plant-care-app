@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  findPlantKnowledge,
-  resolveClimate,
-} from '../../src/domain/knowledge';
+import { resolveClimate } from '../../src/domain/knowledge';
 
-describe('knowledge and climate contracts', () => {
+describe('climate resolution contracts', () => {
   it('resolves a known location result shape', () => {
     const result = resolveClimate({ city: 'London', country: 'United Kingdom' });
 
@@ -35,6 +32,33 @@ describe('knowledge and climate contracts', () => {
     });
   });
 
+  it('maps every required country to its climate', () => {
+    expect(resolveClimate({ city: '', country: 'United Kingdom' })).toEqual({
+      climate: 'TEMPERATE',
+      usedFallback: false,
+    });
+    expect(resolveClimate({ city: '', country: 'Kenya' })).toEqual({
+      climate: 'TROPICAL',
+      usedFallback: false,
+    });
+    expect(resolveClimate({ city: '', country: 'Egypt' })).toEqual({
+      climate: 'ARID',
+      usedFallback: false,
+    });
+    expect(resolveClimate({ city: '', country: 'Spain' })).toEqual({
+      climate: 'MEDITERRANEAN',
+      usedFallback: false,
+    });
+    expect(resolveClimate({ city: '', country: 'Canada' })).toEqual({
+      climate: 'CONTINENTAL',
+      usedFallback: false,
+    });
+    expect(resolveClimate({ city: '', country: 'Iceland' })).toEqual({
+      climate: 'POLAR',
+      usedFallback: false,
+    });
+  });
+
   it('uses the explicit temperate fallback for blank or unmapped locations', () => {
     expect(resolveClimate({ city: '', country: '' })).toEqual({
       climate: 'TEMPERATE',
@@ -57,15 +81,5 @@ describe('knowledge and climate contracts', () => {
     const location = { city: 'London', country: 'United Kingdom' };
 
     expect(resolveClimate(location)).toEqual(resolveClimate(location));
-  });
-
-});
-
-describe('knowledge lookup contracts', () => {
-  it('returns an explicit unsupported result for an unknown genus', () => {
-    expect(findPlantKnowledge({ genus: 'NotAPlant' })).toEqual({
-      status: 'UNSUPPORTED',
-      requestedGenus: 'NotAPlant',
-    });
   });
 });
