@@ -1,11 +1,5 @@
-import type {
-  ClimateResolution,
-  HouseholdLocation,
-  KnowledgeLookupResult,
-  PlantKnowledgeQuery,
-} from './types';
-
 export { resolveClimate } from './climate';
+export { findPlantKnowledge } from './catalog';
 
 export type {
   ClimateClassification,
@@ -14,7 +8,3 @@ export type {
   KnowledgeLookupResult,
   PlantKnowledgeQuery,
 } from './types';
-
-export declare function findPlantKnowledge(
-  query: PlantKnowledgeQuery,
-): KnowledgeLookupResult;

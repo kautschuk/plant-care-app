@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { resolveClimate } from '../../src/domain/knowledge';
+import {
+  findPlantKnowledge,
+  resolveClimate,
+} from '../../src/domain/knowledge';
+import {
+  allCatalogEntriesForTesting,
+  createCatalogRecordForTesting,
+  createKnowledgeCatalogForTesting,
+} from '../../src/domain/knowledge/catalog.test-support';
 
 describe('climate resolution contracts', () => {
   it('resolves a known location result shape', () => {
@@ -81,5 +89,46 @@ describe('climate resolution contracts', () => {
     const location = { city: 'London', country: 'United Kingdom' };
 
     expect(resolveClimate(location)).toEqual(resolveClimate(location));
+  });
+
+  it('prefers exact species knowledge over the shared genus fallback', () => {
+    const result = findPlantKnowledge({
+      species: ' MONSTERA   DELICIOSA ',
+      genus: 'Monstera',
+    });
+
+    expect(result.status).toBe('FOUND');
+    if (result.status === 'FOUND') {
+      expect(result.entry.taxonomicLevel).toBe('SPECIES');
+      expect(result.entry.species).toBe('Monstera deliciosa');
+    }
+  });
+
+  it('returns genus guidance when species knowledge is unavailable', () => {
+    const result = findPlantKnowledge({
+      species: 'Sansevieria trifasciata',
+      genus: 'Sansevieria',
+    });
+
+    expect(result.status).toBe('FOUND');
+    if (result.status === 'FOUND') {
+      expect(result.entry.taxonomicLevel).toBe('GENUS');
+      expect(result.entry.species).toBeUndefined();
+    }
+  });
+
+  it('rejects malformed catalog intervals and duplicate normalized identities', () => {
+    expect(() => createKnowledgeCatalogForTesting([
+      createCatalogRecordForTesting({ genus: 'Monstera', species: 'M deliciosa' }),
+      createCatalogRecordForTesting({ genus: ' monstera ', species: 'm deliciosa' }),
+    ])).toThrow();
+  });
+
+  it('keeps fertilizer declarations internally consistent', () => {
+    for (const entry of allCatalogEntriesForTesting()) {
+      expect(entry.fertilizationApplicable).toBe(
+        entry.fertilizerModes.some((mode) => mode !== 'NONE'),
+      );
+    }
   });
 });
