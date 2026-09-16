@@ -138,12 +138,25 @@ function validateCatalogRecord(record: CatalogRecord): void {
   }
 }
 
+function freezeIntervals(intervals: IntervalByClimate): IntervalByClimate {
+  return Object.freeze(
+    Object.fromEntries(
+      CLIMATES.map((climate) => [
+        climate,
+        Object.freeze({ ...intervals[climate] }),
+      ]),
+    ),
+  ) as IntervalByClimate;
+}
+
 function createKnowledgeEntry(record: CatalogRecord): KnowledgeEntry {
   validateCatalogRecord(record);
-  const wateringIntervals = record.wateringIntervals;
-  const fertilizingIntervals = record.fertilizingIntervals;
+  const wateringIntervals = freezeIntervals(record.wateringIntervals);
+  const fertilizingIntervals = record.fertilizingIntervals === undefined
+    ? undefined
+    : freezeIntervals(record.fertilizingIntervals);
 
-  return {
+  return Object.freeze({
     genus: record.genus.trim().replace(/\s+/g, ' '),
     ...(record.species === undefined
       ? {}
@@ -153,7 +166,11 @@ function createKnowledgeEntry(record: CatalogRecord): KnowledgeEntry {
     fertilizationApplicable: record.fertilizationApplicable,
     fertilizerModes: Object.freeze([...record.fertilizerModes]),
     seasonFor: record.seasonFor,
-    intervalFor: (climate, season, careType): IntervalDays => {
+    intervalFor: (
+      climate: string,
+      season: Season,
+      careType: CareType,
+    ): IntervalDays => {
       const intervals = careType === 'WATERING'
         ? wateringIntervals
         : fertilizingIntervals;
@@ -172,7 +189,7 @@ function createKnowledgeEntry(record: CatalogRecord): KnowledgeEntry {
       }
       return positiveInterval(interval, `${careType} interval`);
     },
-  };
+  });
 }
 
 export function createKnowledgeCatalog(

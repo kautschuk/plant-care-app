@@ -9,6 +9,15 @@ import {
   createKnowledgeCatalogForTesting,
 } from '../../src/domain/knowledge/catalog.test-support';
 
+const SUPPORTED_CLIMATES = [
+  'TROPICAL',
+  'ARID',
+  'MEDITERRANEAN',
+  'TEMPERATE',
+  'CONTINENTAL',
+  'POLAR',
+] as const;
+
 describe('climate resolution contracts', () => {
   it('resolves a known location result shape', () => {
     const result = resolveClimate({ city: 'London', country: 'United Kingdom' });
@@ -130,5 +139,91 @@ describe('climate resolution contracts', () => {
         entry.fertilizerModes.some((mode) => mode !== 'NONE'),
       );
     }
+  });
+
+  it('preserves unsupported lookup values without synthesizing knowledge', () => {
+    expect(findPlantKnowledge({
+      species: 'Unknown species',
+      genus: 'Unknown genus',
+    })).toEqual({
+      status: 'UNSUPPORTED',
+      requestedSpecies: 'Unknown species',
+      requestedGenus: 'Unknown genus',
+    });
+  });
+
+  it('uses deterministic growing and dormant boundaries for temperate climates', () => {
+    const entry = allCatalogEntriesForTesting().find(
+      (candidate) => candidate.species === 'Monstera deliciosa',
+    );
+    expect(entry).toBeDefined();
+    if (!entry) return;
+
+    expect(entry.seasonFor('TEMPERATE', '2026-02-28' as never)).toBe('DORMANT');
+    expect(entry.seasonFor('TEMPERATE', '2026-03-01' as never)).toBe('GROWING');
+    expect(entry.seasonFor('TEMPERATE', '2026-10-31' as never)).toBe('GROWING');
+    expect(entry.seasonFor('TEMPERATE', '2026-11-01' as never)).toBe('DORMANT');
+    expect(entry.seasonFor('POLAR', '2026-04-30' as never)).toBe('DORMANT');
+    expect(entry.seasonFor('POLAR', '2026-05-01' as never)).toBe('GROWING');
+    expect(entry.seasonFor('POLAR', '2026-08-08' as never)).toBe('GROWING');
+    expect(entry.seasonFor('POLAR', '2026-09-01' as never)).toBe('DORMANT');
+  });
+
+  it('keeps year-round entries growing for every climate and date', () => {
+    const entry = allCatalogEntriesForTesting().find(
+      (candidate) => candidate.species === 'Monstera adansonii',
+    );
+    expect(entry).toBeDefined();
+    if (!entry) return;
+
+    for (const climate of SUPPORTED_CLIMATES) {
+      expect(entry.seasonFor(climate, '2026-01-01' as never)).toBe('GROWING');
+      expect(entry.seasonFor(climate, '2026-12-31' as never)).toBe('GROWING');
+    }
+  });
+
+  it('provides positive intervals for each climate and applicable season', () => {
+    for (const entry of allCatalogEntriesForTesting()) {
+      for (const climate of SUPPORTED_CLIMATES) {
+        const seasons = entry.seasonalModel === 'YEAR_ROUND'
+          ? ['GROWING'] as const
+          : ['GROWING', 'DORMANT'] as const;
+        for (const season of seasons) {
+          expect(entry.intervalFor(climate, season, 'WATERING')).toBeGreaterThan(0);
+          if (entry.fertilizationApplicable) {
+            expect(entry.intervalFor(climate, season, 'FERTILIZING')).toBeGreaterThan(0);
+          }
+        }
+      }
+    }
+  });
+
+  it('declares the required fertilizer mode for each concrete catalog entry', () => {
+    const entries = allCatalogEntriesForTesting();
+    expect(entries.find((entry) => entry.species === 'Monstera deliciosa')?.fertilizerModes)
+      .toEqual(['LIQUID']);
+    expect(entries.find((entry) => entry.species === 'Monstera adansonii')?.fertilizerModes)
+      .toEqual(['NONE']);
+    expect(entries.find((entry) => entry.genus === 'Sansevieria')?.fertilizerModes)
+      .toEqual(['LONG_TERM']);
+    expect(entries.find((entry) => entry.genus === 'Phalaenopsis')?.fertilizerModes)
+      .toEqual(['LIQUID']);
+  });
+
+  it('freezes exposed entries and detaches them from mutable catalog inputs', () => {
+    const record = createCatalogRecordForTesting({ genus: 'Mutable' });
+    const catalog = createKnowledgeCatalogForTesting([record]);
+    const entry = catalog[0];
+
+    expect(Object.isFrozen(catalog)).toBe(true);
+    expect(Object.isFrozen(entry)).toBe(true);
+    expect(Object.isFrozen(entry.fertilizerModes)).toBe(true);
+    expect(Reflect.set(entry, 'genus', 'Changed')).toBe(false);
+    expect(Reflect.set(entry.fertilizerModes, 0, 'LIQUID')).toBe(false);
+    expect(entry.genus).toBe('Mutable');
+    expect(entry.fertilizerModes).toEqual(['NONE']);
+
+    (record.wateringIntervals.TROPICAL as { GROWING: number }).GROWING = 1;
+    expect(entry.intervalFor('TROPICAL', 'GROWING', 'WATERING')).toBe(7);
   });
 });
