@@ -5,6 +5,8 @@ import type {
   PlantKnowledgeQuery,
 } from './types';
 
+export { resolveClimate } from './climate';
+
 export type {
   ClimateClassification,
   ClimateResolution,
@@ -12,10 +14,6 @@ export type {
   KnowledgeLookupResult,
   PlantKnowledgeQuery,
 } from './types';
-
-export declare function resolveClimate(
-  location: HouseholdLocation,
-): ClimateResolution;
 
 export declare function findPlantKnowledge(
   query: PlantKnowledgeQuery,
