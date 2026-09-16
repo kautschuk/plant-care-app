@@ -229,6 +229,22 @@ describe('climate resolution contracts', () => {
     }
   });
 
+  it('uses deterministic growing and dormant boundaries for Mediterranean and Continental climates', () => {
+    const entries = allCatalogEntriesForTesting().filter(
+      (candidate) => candidate.seasonalModel === 'GROWING_DORMANT',
+    );
+    expect(entries).not.toHaveLength(0);
+
+    for (const entry of entries) {
+      for (const climate of ['MEDITERRANEAN', 'CONTINENTAL'] as const) {
+        expect(entry.seasonFor(climate, '2026-02-28' as never)).toBe('DORMANT');
+        expect(entry.seasonFor(climate, '2026-03-01' as never)).toBe('GROWING');
+        expect(entry.seasonFor(climate, '2026-10-31' as never)).toBe('GROWING');
+        expect(entry.seasonFor(climate, '2026-11-01' as never)).toBe('DORMANT');
+      }
+    }
+  });
+
   it('keeps year-round entries growing for every climate and date', () => {
     const entry = allCatalogEntriesForTesting().find(
       (candidate) => candidate.species === 'Monstera adansonii',
