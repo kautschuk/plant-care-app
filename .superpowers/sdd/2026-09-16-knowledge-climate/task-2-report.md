@@ -34,3 +34,25 @@
 ## Concerns
 
 - The complete knowledge test file is not green until Task 3 implements `findPlantKnowledge`; this is an intentional existing contract stub and outside Task 2 scope.
+
+## Review Fix Report
+
+### Changed Files
+
+- `tests/knowledge/knowledge.test.ts`: Kept this focused acceptance file climate-only and added direct assertions for United Kingdom, Kenya, Egypt, Spain, Canada, and Iceland.
+- `tests/knowledge/plant-knowledge.test.ts`: Moved the unchanged Task 1 `findPlantKnowledge` contract test into its own file so its expected red state remains isolated from Task 2 acceptance coverage.
+
+### Tests and Output
+
+- `npm test -- --run tests/knowledge/knowledge.test.ts`: passed, 1 file and 8 tests passed.
+- `npx tsc --noEmit`: passed with no diagnostics.
+- `git diff --check`: passed with no whitespace errors.
+- Before the fix, the focused command reproduced the reported failure: 7 climate tests passed and the deferred `findPlantKnowledge` contract failed with `TypeError: findPlantKnowledge is not a function`.
+
+### Commit
+
+- Fix commit: `2b99d6e5f4c22dea83fdd42a79d5ccb6ade14cf5` (`test(knowledge): isolate climate acceptance tests`)
+
+### Concerns
+
+- The isolated Task 1 contract remains expected to fail until Task 3 implements `findPlantKnowledge`; it was not weakened or deleted.
