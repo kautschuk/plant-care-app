@@ -4,6 +4,11 @@ import {
   resolveClimate,
 } from '../../src/domain/knowledge';
 import {
+  initializeSchedule,
+  projectSchedule,
+  validateISODate,
+} from '../../src/domain/scheduling';
+import {
   allCatalogEntriesForTesting,
   createCatalogRecordForTesting,
   createKnowledgeCatalogForTesting,
@@ -124,6 +129,58 @@ describe('climate resolution contracts', () => {
       expect(result.entry.taxonomicLevel).toBe('GENUS');
       expect(result.entry.species).toBeUndefined();
     }
+  });
+
+  it('returns a catalog entry usable by schedule initialization', () => {
+    const result = findPlantKnowledge({
+      species: 'Monstera deliciosa',
+      genus: 'Monstera',
+    });
+
+    expect(result.status).toBe('FOUND');
+    if (result.status !== 'FOUND') {
+      throw new Error('Expected catalog knowledge');
+    }
+
+    const schedule = initializeSchedule({
+      today: validateISODate('2026-09-16'),
+      lastCompletedDate: validateISODate('2026-09-10'),
+      knowledge: result.entry,
+      climate: resolveClimate({ city: 'London', country: 'United Kingdom' }).climate,
+    });
+
+    expect(schedule.projection.baseIntervalDays).toBeGreaterThan(0);
+    expect(schedule.projection.effectiveIntervalDays).toBeGreaterThanOrEqual(1);
+  });
+
+  it('keeps seasonal projection deterministic for identical snapshots', () => {
+    const result = findPlantKnowledge({ genus: 'Phalaenopsis' });
+
+    expect(result.status).toBe('FOUND');
+    if (result.status !== 'FOUND') {
+      throw new Error('Expected catalog knowledge');
+    }
+
+    const input = {
+      today: validateISODate('2026-09-16'),
+      state: {
+        careSchedules: {
+          WATERING: {
+            lastCompletedDate: validateISODate('2026-09-10'),
+            nextDueDate: validateISODate('2026-09-17'),
+            learnedAdjustments: {
+              model: 'GROWING_DORMANT' as const,
+              growingDays: 0,
+              dormantDays: 0,
+            },
+          },
+        },
+      },
+      knowledge: result.entry,
+      climate: 'TEMPERATE' as const,
+    };
+
+    expect(projectSchedule(input)).toEqual(projectSchedule(input));
   });
 
   it('rejects malformed catalog intervals and duplicate normalized identities', () => {
