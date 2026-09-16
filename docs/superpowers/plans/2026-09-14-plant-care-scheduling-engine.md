@@ -71,11 +71,11 @@ The functions must be pure: no system clock, random values, filesystem calls, no
 - `ScheduleState` must persist last completed dates per enabled care type, seasonal learned adjustments, and next due dates; `baseInterval` and active season are calculation outputs, not authoritative persisted fields.
 - `FertilizerMode` must be `NONE | LIQUID | LONG_TERM` for this plan.
 
-- [ ] **Step 1: Add the test command and test dependency**
+- [x] **Step 1: Add the test command and test dependency**
 
 Add a `test` script that runs Vitest once and add Vitest as a development dependency. Keep the existing Expo scripts unchanged.
 
-- [ ] **Step 2: Write the first failing contract tests**
+- [x] **Step 2: Write the first failing contract tests**
 
 Start `tests/scheduling/engine.test.ts` with tests that import the future engine API and describe these required cases:
 
@@ -109,17 +109,17 @@ it('does not reduce the persisted adjustment below the one-day effective floor',
 
 Add fixture helpers in the same test file or a dedicated test helper only if the file becomes difficult to scan. Include cases for year-round and growing/dormant knowledge models.
 
-- [ ] **Step 3: Run the focused test and verify it fails**
+- [x] **Step 3: Run the focused test and verify it fails**
 
 Run: `npm test -- --run tests/scheduling/engine.test.ts`
 
 Expected: FAIL because the scheduling types and engine exports do not exist yet.
 
-- [ ] **Step 4: Define the types and deterministic knowledge fixture**
+- [x] **Step 4: Define the types and deterministic knowledge fixture**
 
 Define explicit union types for seasonal model, season, care type, fertilizer mode, and schedule actions. Represent dates as validated ISO-date strings at the boundary and intervals as positive integer day counts. Keep climate as a normalized opaque identifier consumed by knowledge lookup. Make `baseIntervalDays` a lookup result, not a persisted schedule-state field.
 
-- [ ] **Step 5: Run the focused typecheck**
+- [x] **Step 5: Run the focused typecheck**
 
 Run: `npx tsc --noEmit`
 
@@ -137,7 +137,7 @@ Expected: The new types and test imports compile, while engine implementation im
 - `initializeSchedule` maps each user-provided last-care date to `lastCompletedDate`, initializes applicable learned adjustments to zero, and computes the first `nextDueDate`.
 - `projectSchedule` derives active season, base interval, effective interval, due status, fertilizer coupling, and guidance level without mutating state.
 
-- [ ] **Step 1: Add failing projection tests**
+- [x] **Step 1: Add failing projection tests**
 
 Cover these exact examples:
 
@@ -163,13 +163,13 @@ it('combines liquid fertilizer with watering and keeps long-term fertilizer inde
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
 Run: `npm test -- --run tests/scheduling/engine.test.ts`
 
 Expected: FAIL for unimplemented initialization and projection behavior.
 
-- [ ] **Step 3: Implement minimal pure initialization and projection**
+- [x] **Step 3: Implement minimal pure initialization and projection**
 
 Compute:
 
@@ -181,7 +181,7 @@ nextDueDate = lastCompletedDate + effectiveIntervalDays
 
 For a year-round model use one adjustment and no season transition. For growing/dormant use only the active season’s adjustment. Do not persist planner tasks.
 
-- [ ] **Step 4: Run the focused tests and typecheck**
+- [x] **Step 4: Run the focused tests and typecheck**
 
 Run: `npm test -- --run tests/scheduling/engine.test.ts && npx tsc --noEmit`
 
@@ -199,7 +199,7 @@ Expected: PASS for all Task 2 tests and no TypeScript errors.
 - `applyScheduleAction` must support `COMPLETE`, `POSTPONE`, `FEEDBACK_EARLIER`, and `FEEDBACK_LATER`.
 - `recalculateForLocationChange` must support `RESET_TO_DEFAULTS` and `PRESERVE_LEARNED_STATE`.
 
-- [ ] **Step 1: Add failing transition tests**
+- [x] **Step 1: Add failing transition tests**
 
 Include these normative cases:
 
@@ -241,27 +241,27 @@ it('standalone journal facts are not schedule actions', () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
 Run: `npm test -- --run tests/scheduling/engine.test.ts`
 
 Expected: FAIL until all action transitions are implemented.
 
-- [ ] **Step 3: Implement completion and feedback transitions**
+- [x] **Step 3: Implement completion and feedback transitions**
 
 For `COMPLETE`, set `lastCompletedDate` to the explicit completion date, preserve the active adjustment unless feedback is included, derive the next due date from that date, and return the care event descriptors. For liquid fertilizer, return separate watering and fertilizing event descriptors while retaining one combined planner task.
 
 For earlier/later feedback, adjust only the active seasonal or year-round adjustment by one day. Clamp the adjustment so no further earlier feedback can reduce the effective interval below one day; at the floor, the adjustment remains unchanged.
 
-- [ ] **Step 4: Implement postponement transition**
+- [x] **Step 4: Implement postponement transition**
 
 Validate the requested postponement as a positive integer no greater than the effective interval before postponement. On valid input, shift `nextDueDate` by the requested days and add the same days to the active adjustment. On invalid input, return a typed domain error without mutating state.
 
-- [ ] **Step 5: Implement location recalculation**
+- [x] **Step 5: Implement location recalculation**
 
 Use `lastCompletedDate` as the only anchor. For reset, clear all seasonal/year-round learned adjustments. For preserve, retain them. In both cases derive the new climate interval and next due date from the selected adjustment.
 
-- [ ] **Step 6: Run focused tests and typecheck**
+- [x] **Step 6: Run focused tests and typecheck**
 
 Run: `npm test -- --run tests/scheduling/engine.test.ts && npx tsc --noEmit`
 
@@ -277,7 +277,7 @@ Expected: PASS with deterministic results and no TypeScript errors.
 - Consumes the public engine functions from Tasks 2 and 3.
 - Produces regression coverage for invariants that UI and persistence layers must rely on.
 
-- [ ] **Step 1: Add invariant tests**
+- [x] **Step 1: Add invariant tests**
 
 Cover:
 
@@ -290,13 +290,13 @@ Cover:
 - The same input snapshot always produces the same projection.
 - Year-round plants never gain dormant adjustment fields.
 
-- [ ] **Step 2: Run the complete engine suite**
+- [x] **Step 2: Run the complete engine suite**
 
 Run: `npm test -- --run tests/scheduling/engine.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 3: Run the project typecheck**
+- [x] **Step 3: Run the project typecheck**
 
 Run: `npx tsc --noEmit`
 
@@ -313,21 +313,21 @@ Expected: PASS with existing Expo application files unchanged.
 - Produces a single public domain import surface for later persistence and UI work.
 - Exports types and pure functions without exposing internal date arithmetic or fixture helpers.
 
-- [ ] **Step 1: Add an export-surface test**
+- [x] **Step 1: Add an export-surface test**
 
 Import the public functions from `src/domain/scheduling/index.ts` and assert that initialization, projection, action application, and location recalculation are available.
 
-- [ ] **Step 2: Implement the narrow public barrel**
+- [x] **Step 2: Implement the narrow public barrel**
 
 Export only the stable scheduling types and functions. Keep knowledge fixtures and internal helpers private to the test or implementation modules.
 
-- [ ] **Step 3: Run the engine suite and typecheck**
+- [x] **Step 3: Run the engine suite and typecheck**
 
 Run: `npm test -- --run tests/scheduling/engine.test.ts && npx tsc --noEmit`
 
 Expected: PASS.
 
-- [ ] **Step 4: Stop for review before UI integration**
+- [x] **Step 4: Stop for review before UI integration**
 
 Review the pure engine against the approved spec. Do not add persistence, notification registration, or screen-level scheduling calculations until this review passes.
 
