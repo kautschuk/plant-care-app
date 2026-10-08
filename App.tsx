@@ -17,13 +17,14 @@ import {
   archivePlant,
   createPlant,
   deletePlant,
+  projectHouseholdPlannerItems,
   recordCareCompletion,
   restorePlant,
   saveHouseholdSettings,
   updatePlant,
 } from './src/application';
+import type { PlannerItem, PlannerPlantInput } from './src/application';
 import { findPlantKnowledge } from './src/domain/knowledge';
-import { projectSchedule } from './src/domain/scheduling';
 import type { ISODateString } from './src/domain/scheduling/types';
 import type { PersistenceStore } from './src/domain/persistence/repositories';
 import type {
@@ -35,14 +36,6 @@ import type {
 const todayIso = (): ISODateString => new Date().toISOString().slice(0, 10) as ISODateString;
 const knowledgeOptions = ['beginner', 'intermediate', 'experienced'] as const;
 const commitmentOptions = ['casual', 'moderate', 'committed'] as const;
-
-type PlannerItem = {
-  plantId: string;
-  plantName: string;
-  careType: 'WATERING' | 'FERTILIZING';
-  dueDate: string;
-  status: 'OVERDUE' | 'DUE_TODAY' | 'NOT_DUE';
-};
 
 export default function App() {
   const [store, setStore] = useState<PersistenceStore | null>(null);
@@ -110,7 +103,7 @@ export default function App() {
 
     let active = true;
     void (async () => {
-      const nextItems: PlannerItem[] = [];
+      const projectionPlants: PlannerPlantInput[] = [];
       for (const { plant, care } of plants) {
         if (!care.schedulingEnabled) continue;
         const schedule = await store.schedules.get(plant.id);
@@ -118,28 +111,20 @@ export default function App() {
         const lookup = findPlantKnowledge({ genus: plant.genus, species: plant.species });
         if (lookup.status !== 'FOUND') continue;
 
-        for (const careType of ['WATERING', 'FERTILIZING'] as const) {
-          const relevantSchedule = schedule.careSchedules[careType];
-          if (!relevantSchedule) continue;
-          const projection = projectSchedule({
-            today: todayIso(),
-            state: schedule,
-            knowledge: lookup.entry,
-            climate: settings.climate,
-            careType,
-          } as const);
-          nextItems.push({
-            plantId: plant.id,
-            plantName: plant.displayName,
-            careType,
-            dueDate: projection.nextDueDate,
-            status: projection.status,
-          });
-        }
+        projectionPlants.push({
+          plantId: plant.id,
+          plantName: plant.displayName,
+          schedule,
+          knowledge: lookup.entry,
+        });
       }
 
       if (active) {
-        setPlannerItems(nextItems);
+        setPlannerItems(projectHouseholdPlannerItems({
+          today: todayIso(),
+          climate: settings.climate,
+          plants: projectionPlants,
+        }));
       }
     })();
 

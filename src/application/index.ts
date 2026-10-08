@@ -9,6 +9,8 @@ export {
   updatePlant,
 } from './use-cases';
 
+export { projectHouseholdPlannerItems } from './planner';
+
 export type {
   CareCompletionResult,
   HouseholdSetupInput,
@@ -21,3 +23,9 @@ export type {
   PlantUpdateResult,
   ScheduleActionResult,
 } from './use-cases';
+
+export type {
+  PlannerItem,
+  PlannerPlantInput,
+  PlannerProjectionInput,
+} from './planner';
