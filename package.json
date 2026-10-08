@@ -4,12 +4,15 @@
   "main": "index.ts",
   "dependencies": {
     "expo": "~57.0.21",
+    "expo-sqlite": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "@types/sql.js": "^1.4.11",
+    "sql.js": "^1.14.2",
     "typescript": "~6.0.3",
     "vitest": "^5.0.1"
   },
