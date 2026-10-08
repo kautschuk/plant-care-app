@@ -17,6 +17,8 @@ import {
   archivePlant,
   createPlant,
   deletePlant,
+  getPostponementQuickChoices,
+  isValidCustomPostponementDays,
   projectHouseholdPlannerItems,
   recordCareCompletion,
   restorePlant,
@@ -58,6 +60,7 @@ export default function App() {
   const [draftFertilizerMode, setDraftFertilizerMode] = useState<'NONE' | 'LIQUID' | 'LONG_TERM'>('NONE');
   const [draftSchedulingEnabled, setDraftSchedulingEnabled] = useState(true);
   const [plannerItems, setPlannerItems] = useState<PlannerItem[]>([]);
+  const [customPostponementDays, setCustomPostponementDays] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -567,23 +570,65 @@ export default function App() {
                     <Text style={styles.groupTitle}>
                       {status === 'OVERDUE' ? 'Overdue' : 'Due today'}
                     </Text>
-                    {items.map((item) => (
-                      <View key={`${item.plantId}-${item.careType}`} style={styles.taskRow}>
-                        <View style={styles.taskHeaderRow}>
-                          <Text style={styles.cardTitle}>{item.plantName}</Text>
-                          <Text style={[styles.pill, status === 'OVERDUE' ? styles.pillOverdue : styles.pillToday]}>
-                            {status === 'OVERDUE' ? 'Overdue' : 'Due today'}
+                    {items.map((item) => {
+                      const taskKey = `${item.plantId}-${item.careType}`;
+                      const customDays = customPostponementDays[taskKey] ?? '';
+                      const customDaysValid = isValidCustomPostponementDays(
+                        customDays,
+                        item.effectiveIntervalDays,
+                      );
+
+                      return (
+                        <View key={taskKey} style={styles.taskRow}>
+                          <View style={styles.taskHeaderRow}>
+                            <Text style={styles.cardTitle}>{item.plantName}</Text>
+                            <Text style={[styles.pill, status === 'OVERDUE' ? styles.pillOverdue : styles.pillToday]}>
+                              {status === 'OVERDUE' ? 'Overdue' : 'Due today'}
+                            </Text>
+                          </View>
+                          <Text>{item.dueDate}</Text>
+                          <View style={styles.actionRow}>
+                            <Button title="Complete" onPress={() => handleCareCompletion(item.plantId, item.careType)} />
+                            {getPostponementQuickChoices(item.effectiveIntervalDays).map((days) => (
+                              <Button
+                                key={days}
+                                title={`Postpone ${days}d`}
+                                onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'POSTPONE', days })}
+                              />
+                            ))}
+                            <Button title="Later" onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_LATER' })} />
+                            <Button title="Earlier" onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_EARLIER' })} />
+                          </View>
+                          <Text style={styles.label}>
+                            Custom postponement (maximum {item.effectiveIntervalDays} days)
                           </Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Days"
+                            value={customDays}
+                            keyboardType="number-pad"
+                            onChangeText={(value) => setCustomPostponementDays((current) => ({
+                              ...current,
+                              [taskKey]: value,
+                            }))}
+                          />
+                          <Text style={styles.muted}>
+                            {customDaysValid
+                              ? `Valid postponement: ${customDays} days.`
+                              : `Enter a whole number from 1 to ${item.effectiveIntervalDays} days.`}
+                          </Text>
+                          <Button
+                            title="Postpone custom"
+                            disabled={!customDaysValid}
+                            onPress={() => handleScheduleAction(
+                              item.plantId,
+                              item.careType,
+                              { type: 'POSTPONE', days: Number(customDays) },
+                            )}
+                          />
                         </View>
-                        <Text>{item.dueDate}</Text>
-                        <View style={styles.actionRow}>
-                          <Button title="Complete" onPress={() => handleCareCompletion(item.plantId, item.careType)} />
-                          <Button title="Postpone 3d" onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'POSTPONE', days: 3 })} />
-                          <Button title="Later" onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_LATER' })} />
-                          <Button title="Earlier" onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_EARLIER' })} />
-                        </View>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 );
               })}

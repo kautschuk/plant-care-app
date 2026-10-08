@@ -9,7 +9,11 @@ export {
   updatePlant,
 } from './use-cases';
 
-export { projectHouseholdPlannerItems } from './planner';
+export {
+  getPostponementQuickChoices,
+  isValidCustomPostponementDays,
+  projectHouseholdPlannerItems,
+} from './planner';
 
 export type {
   CareCompletionResult,

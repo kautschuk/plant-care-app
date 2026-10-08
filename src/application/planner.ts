@@ -7,6 +7,8 @@ import type {
   ScheduleState,
 } from '../domain/scheduling/types';
 
+const POSTPONEMENT_QUICK_CHOICES = [1, 2, 3, 7] as const;
+
 export interface PlannerPlantInput {
   readonly plantId: string;
   readonly plantName: string;
@@ -26,6 +28,22 @@ export interface PlannerItem extends PlannerTask {
   readonly dueDate: ISODateString;
   readonly status: 'NOT_DUE' | 'DUE_TODAY' | 'OVERDUE';
   readonly effectiveIntervalDays: number;
+}
+
+export function getPostponementQuickChoices(maxDays: number): readonly number[] {
+  return POSTPONEMENT_QUICK_CHOICES.filter((days) => days <= maxDays);
+}
+
+export function isValidCustomPostponementDays(
+  value: string,
+  maxDays: number,
+): boolean {
+  if (!Number.isInteger(maxDays) || maxDays < 1 || !/^\d+$/.test(value)) {
+    return false;
+  }
+
+  const days = Number(value);
+  return Number.isSafeInteger(days) && days > 0 && days <= maxDays;
 }
 
 export function projectHouseholdPlannerItems(

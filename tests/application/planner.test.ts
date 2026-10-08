@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { projectHouseholdPlannerItems } from '../../src/application';
+import {
+  getPostponementQuickChoices,
+  isValidCustomPostponementDays,
+  projectHouseholdPlannerItems,
+} from '../../src/application';
 import type {
   CareType,
   Climate,
@@ -96,6 +100,21 @@ describe('projectHouseholdPlannerItems', () => {
       status: 'DUE_TODAY',
       fertilizerMode: 'LIQUID',
       combinedWithWatering: true,
+    });
+  });
+
+  describe('postponement choices', () => {
+    it('offers only standard postponements up to the current effective interval', () => {
+      expect(getPostponementQuickChoices(2)).toEqual([1, 2]);
+      expect(getPostponementQuickChoices(7)).toEqual([1, 2, 3, 7]);
+      expect(getPostponementQuickChoices(9)).toEqual([1, 2, 3, 7]);
+    });
+
+    it('accepts only positive whole custom postponements within the limit', () => {
+      expect(isValidCustomPostponementDays('3', 7)).toBe(true);
+      for (const value of ['', '0', '-1', '1.5', '8', '3days']) {
+        expect(isValidCustomPostponementDays(value, 7)).toBe(false);
+      }
     });
   });
 

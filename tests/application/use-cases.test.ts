@@ -4,6 +4,7 @@ import type { ISODateString } from '../../src/domain/scheduling/types';
 import { createSqliteTestDriver } from '../persistence/sqlite-test-driver';
 import { initializeSchema } from '../../src/adapters/sqlite/schema';
 import { createPersistenceStore } from '../../src/adapters/sqlite/repositories';
+import { PersistenceError } from '../../src/domain/persistence';
 import {
   applyPlantScheduleAction,
   archivePlant,
@@ -250,6 +251,24 @@ describe('application use cases', () => {
       growingDays: 3,
       dormantDays: 0,
     });
+
+    const scheduleBeforeRejectedPostponement = await store.schedules.get('plant-schedule-actions');
+    const rejection = await applyPlantScheduleAction(
+      {
+        plantId: 'plant-schedule-actions',
+        action: { type: 'POSTPONE', days: 999, careType: 'WATERING' },
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBeInstanceOf(PersistenceError);
+    expect(rejection).toMatchObject({ code: 'INVALID_DATA' });
+    expect(await store.schedules.get('plant-schedule-actions'))
+      .toEqual(scheduleBeforeRejectedPostponement);
   });
 
   it('archives, restores, and permanently deletes a plant through the app layer', async () => {
