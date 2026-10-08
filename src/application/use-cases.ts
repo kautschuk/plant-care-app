@@ -12,6 +12,7 @@ import type {
   CareType,
   FertilizerMode,
   ISODateString,
+  ScheduleAction,
   ScheduleState,
 } from '../domain/scheduling/types';
 import { validateISODate } from '../domain/scheduling/types';
@@ -35,10 +36,28 @@ export interface PlantSetupInput {
   readonly today?: ISODateString;
 }
 
+export interface PlantUpdateInput {
+  readonly id: string;
+  readonly displayName?: string;
+  readonly genus?: string;
+  readonly species?: string;
+  readonly fertilizerMode?: FertilizerMode;
+  readonly schedulingEnabled?: boolean;
+  readonly lastCompletedDate?: ISODateString;
+  readonly lastFertilizingDate?: ISODateString;
+  readonly today?: ISODateString;
+}
+
 export interface PlantCareActionInput {
   readonly plantId: string;
   readonly careType?: CareType;
   readonly date?: ISODateString;
+  readonly today?: ISODateString;
+}
+
+export interface PlantScheduleActionInput {
+  readonly plantId: string;
+  readonly action: ScheduleAction;
   readonly today?: ISODateString;
 }
 
@@ -52,7 +71,18 @@ export interface PlantCreationResult {
   readonly schedule?: ScheduleState;
 }
 
+export interface PlantUpdateResult {
+  readonly plant: PlantRecord;
+  readonly care: PlantCareConfiguration;
+  readonly schedule?: ScheduleState;
+}
+
 export interface CareCompletionResult {
+  readonly schedule: ScheduleState;
+  readonly events: readonly CareEvent[];
+}
+
+export interface ScheduleActionResult {
   readonly schedule: ScheduleState;
   readonly events: readonly CareEvent[];
 }
@@ -160,14 +190,125 @@ export async function createPlant(
   return { plant, care, schedule };
 }
 
-export async function recordCareCompletion(
-  input: PlantCareActionInput,
+export async function updatePlant(
+  input: PlantUpdateInput,
   store?: PersistenceStore,
-): Promise<CareCompletionResult> {
+): Promise<PlantUpdateResult> {
+  const resolvedStore = store ?? await defaultStore();
+  const currentPlant = await resolvedStore.plants.get(input.id);
+  if (!currentPlant) {
+    throw new PersistenceError('NOT_FOUND', `Plant ${input.id} was not found`);
+  }
+
+  if (currentPlant.plant.archived) {
+    throw new PersistenceError('INVALID_DATA', `Plant ${input.id} is archived`);
+  }
+
+  const nextDisplayName = (input.displayName ?? currentPlant.plant.displayName).trim();
+  const nextGenus = (input.genus ?? currentPlant.plant.genus).trim();
+  if (!nextDisplayName || !nextGenus) {
+    throw new PersistenceError('INVALID_DATA', 'Display name and genus are required');
+  }
+
+  const lookup = findPlantKnowledge({
+    genus: nextGenus,
+    species: input.species ?? currentPlant.plant.species,
+  });
+  if (lookup.status !== 'FOUND') {
+    throw new PersistenceError(
+      'INVALID_DATA',
+      `No plant knowledge is available for ${nextGenus}${input.species ?? currentPlant.plant.species ? ` ${input.species ?? currentPlant.plant.species}` : ''}`,
+    );
+  }
+
+  const nextPlant: PlantRecord = {
+    ...currentPlant.plant,
+    displayName: nextDisplayName,
+    genus: lookup.entry.genus,
+    species: lookup.entry.taxonomicLevel === 'SPECIES'
+      ? (input.species ?? currentPlant.plant.species ?? lookup.entry.species)
+      : undefined,
+    taxonomicLevel: lookup.entry.taxonomicLevel,
+  };
+
+  const nextCare: PlantCareConfiguration = {
+    ...currentPlant.care,
+    fertilizerMode: input.fertilizerMode ?? currentPlant.care.fertilizerMode,
+    schedulingEnabled: input.schedulingEnabled ?? currentPlant.care.schedulingEnabled,
+  };
+
+  const shouldInitializeSchedule = !currentPlant.care.schedulingEnabled && nextCare.schedulingEnabled;
+  const shouldRemoveSchedule = currentPlant.care.schedulingEnabled && !nextCare.schedulingEnabled;
+
+  if (shouldInitializeSchedule) {
+    const settings = await resolvedStore.householdSettings.get();
+    if (!settings) {
+      throw new PersistenceError(
+        'INVALID_DATA',
+        'Household settings must be saved before a plant schedule can be initialized',
+      );
+    }
+
+    const today = normalizeISODate(input.today ?? currentISODate()) ?? currentISODate();
+    const scheduledState = await resolvedStore.schedules.get(input.id);
+    const lastCompletedDate = normalizeISODate(
+      input.lastCompletedDate ?? scheduledState?.careSchedules.WATERING?.lastCompletedDate ?? today,
+      today,
+    ) ?? today;
+    const lastFertilizingDate = normalizeISODate(
+      input.lastFertilizingDate ?? scheduledState?.careSchedules.FERTILIZING?.lastCompletedDate ?? lastCompletedDate,
+      today,
+    );
+
+    const initialized = initializeSchedule({
+      today,
+      lastCompletedDate,
+      lastFertilizingDate,
+      knowledge: lookup.entry,
+      climate: settings.climate,
+      careType: 'WATERING',
+    });
+
+    await resolvedStore.transaction(async (repositories) => {
+      await repositories.plants.save(nextPlant, nextCare);
+      await repositories.schedules.save(input.id, initialized.state);
+    });
+
+    return {
+      plant: nextPlant,
+      care: nextCare,
+      schedule: initialized.state,
+    };
+  }
+
+  await resolvedStore.transaction(async (repositories) => {
+    await repositories.plants.save(nextPlant, nextCare);
+    if (shouldRemoveSchedule) {
+      await repositories.schedules.delete(input.id);
+    }
+  });
+
+  return {
+    plant: nextPlant,
+    care: nextCare,
+    schedule: nextCare.schedulingEnabled
+      ? ((await resolvedStore.schedules.get(input.id)) ?? undefined)
+      : undefined,
+  };
+}
+
+export async function applyPlantScheduleAction(
+  input: PlantScheduleActionInput,
+  store?: PersistenceStore,
+): Promise<ScheduleActionResult> {
   const resolvedStore = store ?? await defaultStore();
   const plant = await resolvedStore.plants.get(input.plantId);
   if (!plant) {
     throw new PersistenceError('NOT_FOUND', `Plant ${input.plantId} was not found`);
+  }
+
+  if (plant.plant.archived) {
+    throw new PersistenceError('INVALID_DATA', `Plant ${input.plantId} is archived`);
   }
 
   const settings = await resolvedStore.householdSettings.get();
@@ -187,21 +328,23 @@ export async function recordCareCompletion(
   }
 
   const today = normalizeISODate(input.today ?? currentISODate()) ?? currentISODate();
-  const date = normalizeISODate(input.date ?? today, today) ?? today;
   const schedule = (await resolvedStore.schedules.get(input.plantId)) ?? {
     careSchedules: {},
   };
+
+  const action = input.action.type === 'COMPLETE'
+    ? {
+        ...input.action,
+        completedDate: normalizeISODate(input.action.completedDate ?? today, today) ?? today,
+      }
+    : input.action;
 
   const result = applyScheduleAction({
     today,
     state: schedule,
     knowledge: lookup.entry,
     climate: settings.climate,
-    action: {
-      type: 'COMPLETE',
-      completedDate: date,
-      careType: input.careType ?? 'WATERING',
-    },
+    action,
   });
 
   if (result.error) {
@@ -223,6 +366,50 @@ export async function recordCareCompletion(
   });
 
   return { schedule: result.state, events };
+}
+
+export async function recordCareCompletion(
+  input: PlantCareActionInput,
+  store?: PersistenceStore,
+): Promise<CareCompletionResult> {
+  const result = await applyPlantScheduleAction(
+    {
+      plantId: input.plantId,
+      action: {
+        type: 'COMPLETE',
+        completedDate: input.date,
+        careType: input.careType ?? 'WATERING',
+      },
+      today: input.today,
+    },
+    store,
+  );
+
+  return { schedule: result.schedule, events: result.events };
+}
+
+export async function archivePlant(
+  plantId: string,
+  store?: PersistenceStore,
+): Promise<void> {
+  const resolvedStore = store ?? await defaultStore();
+  await resolvedStore.plants.archive(plantId);
+}
+
+export async function restorePlant(
+  plantId: string,
+  store?: PersistenceStore,
+): Promise<void> {
+  const resolvedStore = store ?? await defaultStore();
+  await resolvedStore.plants.restore(plantId);
+}
+
+export async function deletePlant(
+  plantId: string,
+  store?: PersistenceStore,
+): Promise<void> {
+  const resolvedStore = store ?? await defaultStore();
+  await resolvedStore.plants.deletePermanently(plantId);
 }
 
 function normalizeISODate(

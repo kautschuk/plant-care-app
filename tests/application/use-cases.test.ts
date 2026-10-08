@@ -5,10 +5,21 @@ import { createSqliteTestDriver } from '../persistence/sqlite-test-driver';
 import { initializeSchema } from '../../src/adapters/sqlite/schema';
 import { createPersistenceStore } from '../../src/adapters/sqlite/repositories';
 import {
+  applyPlantScheduleAction,
+  archivePlant,
   createPlant,
+  deletePlant,
   recordCareCompletion,
+  restorePlant,
   saveHouseholdSettings,
+  updatePlant,
 } from '../../src/application';
+
+function addDays(date: string, days: number): string {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
 
 describe('application use cases', () => {
   it('stores household settings and initializes a supported plant schedule', async () => {
@@ -48,6 +59,64 @@ describe('application use cases', () => {
     expect(created.care.schedulingEnabled).toBe(true);
     expect(created.schedule?.careSchedules.WATERING).toBeDefined();
     expect(await store.schedules.get('plant-setup')).toEqual(created.schedule);
+  });
+
+  it('updates plant details and can toggle scheduling state', async () => {
+    const database = await createSqliteTestDriver();
+    await initializeSchema(database);
+    const store = createPersistenceStore(database);
+
+    await saveHouseholdSettings(
+      {
+        knowledgeLevel: 'beginner',
+        commitmentLevel: 'moderate',
+        city: 'London',
+        country: 'United Kingdom',
+      },
+      store,
+    );
+
+    await createPlant(
+      {
+        id: 'plant-update',
+        displayName: 'Monstera',
+        genus: 'Monstera',
+        species: 'Monstera deliciosa',
+        fertilizerMode: 'LIQUID',
+        schedulingEnabled: true,
+        lastCompletedDate: '2026-10-01' as ISODateString,
+        lastFertilizingDate: '2026-10-01' as ISODateString,
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+
+    const updated = await updatePlant(
+      {
+        id: 'plant-update',
+        displayName: 'Monstera Deluxe',
+        genus: 'Monstera',
+        species: 'Monstera deliciosa',
+        fertilizerMode: 'LONG_TERM',
+        schedulingEnabled: true,
+      },
+      store,
+    );
+
+    expect(updated.plant.displayName).toBe('Monstera Deluxe');
+    expect(updated.care.fertilizerMode).toBe('LONG_TERM');
+    expect((await store.schedules.get('plant-update'))?.careSchedules.WATERING).toBeDefined();
+
+    const deactivated = await updatePlant(
+      {
+        id: 'plant-update',
+        schedulingEnabled: false,
+      },
+      store,
+    );
+
+    expect(deactivated.care.schedulingEnabled).toBe(false);
+    expect(await store.schedules.get('plant-update')).toBeNull();
   });
 
   it('records a completed care action inside one transaction', async () => {
@@ -100,5 +169,126 @@ describe('application use cases', () => {
         .map((event) => event.type)
         .sort(),
     ).toEqual(['FERTILIZING', 'WATERING']);
+  });
+
+  it('applies postponement and feedback actions through the app layer', async () => {
+    const database = await createSqliteTestDriver();
+    await initializeSchema(database);
+    const store = createPersistenceStore(database);
+
+    await saveHouseholdSettings(
+      {
+        knowledgeLevel: 'beginner',
+        commitmentLevel: 'moderate',
+        city: 'London',
+        country: 'United Kingdom',
+      },
+      store,
+    );
+
+    await createPlant(
+      {
+        id: 'plant-schedule-actions',
+        displayName: 'Monstera',
+        genus: 'Monstera',
+        species: 'Monstera deliciosa',
+        fertilizerMode: 'LIQUID',
+        schedulingEnabled: true,
+        lastCompletedDate: '2026-10-01' as ISODateString,
+        lastFertilizingDate: '2026-10-01' as ISODateString,
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+
+    const initialSchedule = (await store.schedules.get('plant-schedule-actions'))!;
+    const postponed = await applyPlantScheduleAction(
+      {
+        plantId: 'plant-schedule-actions',
+        action: { type: 'POSTPONE', days: 3, careType: 'WATERING' },
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+
+    expect(postponed.events).toEqual([]);
+    expect(postponed.schedule.careSchedules.WATERING?.nextDueDate).toBe(
+      addDays(initialSchedule.careSchedules.WATERING!.nextDueDate, 3),
+    );
+    expect(postponed.schedule.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'GROWING_DORMANT',
+      growingDays: 3,
+      dormantDays: 0,
+    });
+
+    const laterFeedback = await applyPlantScheduleAction(
+      {
+        plantId: 'plant-schedule-actions',
+        action: { type: 'FEEDBACK_LATER', careType: 'WATERING' },
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+
+    expect(laterFeedback.schedule.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'GROWING_DORMANT',
+      growingDays: 4,
+      dormantDays: 0,
+    });
+
+    const earlierFeedback = await applyPlantScheduleAction(
+      {
+        plantId: 'plant-schedule-actions',
+        action: { type: 'FEEDBACK_EARLIER', careType: 'WATERING' },
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+
+    expect(earlierFeedback.schedule.careSchedules.WATERING?.learnedAdjustments).toEqual({
+      model: 'GROWING_DORMANT',
+      growingDays: 3,
+      dormantDays: 0,
+    });
+  });
+
+  it('archives, restores, and permanently deletes a plant through the app layer', async () => {
+    const database = await createSqliteTestDriver();
+    await initializeSchema(database);
+    const store = createPersistenceStore(database);
+
+    await saveHouseholdSettings(
+      {
+        knowledgeLevel: 'beginner',
+        commitmentLevel: 'moderate',
+        city: 'London',
+        country: 'United Kingdom',
+      },
+      store,
+    );
+
+    await createPlant(
+      {
+        id: 'plant-lifecycle',
+        displayName: 'Fern',
+        genus: 'Monstera',
+        species: 'Monstera deliciosa',
+        fertilizerMode: 'NONE',
+        schedulingEnabled: true,
+        lastCompletedDate: '2026-10-02' as ISODateString,
+        lastFertilizingDate: '2026-10-02' as ISODateString,
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+
+    await archivePlant('plant-lifecycle', store);
+    expect((await store.plants.get('plant-lifecycle'))?.plant.archived).toBe(true);
+
+    await restorePlant('plant-lifecycle', store);
+    expect((await store.plants.get('plant-lifecycle'))?.plant.archived).toBe(false);
+
+    await deletePlant('plant-lifecycle', store);
+    expect(await store.plants.get('plant-lifecycle')).toBeNull();
   });
 });
