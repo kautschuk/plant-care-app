@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Pressable,
@@ -63,6 +63,8 @@ export default function App() {
   const [customPostponementDays, setCustomPostponementDays] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const plannerActionInFlight = useRef(false);
+  const [isPlannerActionPending, setIsPlannerActionPending] = useState(false);
 
   const refreshPlants = async (nextStore: PersistenceStore) => {
     const nextPlants = await nextStore.plants.list(false);
@@ -312,7 +314,9 @@ export default function App() {
   };
 
   const handleCareCompletion = async (plantId: string, careType: 'WATERING' | 'FERTILIZING') => {
-    if (!store) return;
+    if (!store || plannerActionInFlight.current) return;
+    plannerActionInFlight.current = true;
+    setIsPlannerActionPending(true);
 
     try {
       setErrorMessage(null);
@@ -324,6 +328,9 @@ export default function App() {
       const message = error instanceof Error ? error.message : 'Could not complete care.';
       setErrorMessage(message);
       setStatusMessage(null);
+    } finally {
+      plannerActionInFlight.current = false;
+      setIsPlannerActionPending(false);
     }
   };
 
@@ -332,7 +339,9 @@ export default function App() {
     careType: 'WATERING' | 'FERTILIZING',
     action: { type: 'POSTPONE'; days: number } | { type: 'FEEDBACK_LATER' } | { type: 'FEEDBACK_EARLIER' },
   ) => {
-    if (!store) return;
+    if (!store || plannerActionInFlight.current) return;
+    plannerActionInFlight.current = true;
+    setIsPlannerActionPending(true);
 
     try {
       setErrorMessage(null);
@@ -356,6 +365,9 @@ export default function App() {
       const message = error instanceof Error ? error.message : 'Could not update schedule.';
       setErrorMessage(message);
       setStatusMessage(null);
+    } finally {
+      plannerActionInFlight.current = false;
+      setIsPlannerActionPending(false);
     }
   };
 
@@ -588,16 +600,29 @@ export default function App() {
                           </View>
                           <Text>{item.dueDate}</Text>
                           <View style={styles.actionRow}>
-                            <Button title="Complete" onPress={() => handleCareCompletion(item.plantId, item.careType)} />
+                            <Button
+                              title="Complete"
+                              disabled={isPlannerActionPending}
+                              onPress={() => handleCareCompletion(item.plantId, item.careType)}
+                            />
                             {getPostponementQuickChoices(item.effectiveIntervalDays).map((days) => (
                               <Button
                                 key={days}
                                 title={`Postpone ${days}d`}
+                                disabled={isPlannerActionPending}
                                 onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'POSTPONE', days })}
                               />
                             ))}
-                            <Button title="Later" onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_LATER' })} />
-                            <Button title="Earlier" onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_EARLIER' })} />
+                            <Button
+                              title="Later"
+                              disabled={isPlannerActionPending}
+                              onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_LATER' })}
+                            />
+                            <Button
+                              title="Earlier"
+                              disabled={isPlannerActionPending}
+                              onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_EARLIER' })}
+                            />
                           </View>
                           <Text style={styles.label}>
                             Custom postponement (maximum {item.effectiveIntervalDays} days)
@@ -619,7 +644,7 @@ export default function App() {
                           </Text>
                           <Button
                             title="Postpone custom"
-                            disabled={!customDaysValid}
+                            disabled={!customDaysValid || isPlannerActionPending}
                             onPress={() => handleScheduleAction(
                               item.plantId,
                               item.careType,
