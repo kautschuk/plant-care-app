@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   test:
-    name: Unit tests
+    name: Quality checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
