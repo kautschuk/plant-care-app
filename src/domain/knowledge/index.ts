@@ -1,5 +1,8 @@
 export { resolveClimate } from './climate';
-export { findPlantKnowledge } from './catalog';
+export {
+  findPlantKnowledge,
+  getPlantTaxonomyOptions,
+} from './catalog';
 
 export type {
   ClimateClassification,
@@ -8,3 +11,7 @@ export type {
   KnowledgeLookupResult,
   PlantKnowledgeQuery,
 } from './types';
+export type {
+  PlantSpeciesOption,
+  PlantTaxonomyOption,
+} from './catalog';

@@ -131,6 +131,17 @@ describe('climate resolution contracts', () => {
     }
   });
 
+  it('rejects a known species when it is paired with a different genus', () => {
+    expect(findPlantKnowledge({
+      genus: 'Sansevieria',
+      species: 'Monstera deliciosa',
+    })).toEqual({
+      status: 'UNSUPPORTED',
+      requestedSpecies: 'Monstera deliciosa',
+      requestedGenus: 'Sansevieria',
+    });
+  });
+
   it('returns a catalog entry usable by schedule initialization', () => {
     const result = findPlantKnowledge({
       species: 'Monstera deliciosa',

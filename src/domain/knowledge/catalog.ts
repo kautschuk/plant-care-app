@@ -39,6 +39,17 @@ export interface CatalogRecord {
   readonly seasonFor: (climate: string, today: ISODateString) => Season;
 }
 
+export interface PlantSpeciesOption {
+  readonly label: string;
+  readonly value: string;
+}
+
+export interface PlantTaxonomyOption {
+  readonly genus: string;
+  readonly species: readonly PlantSpeciesOption[];
+  readonly genusLevelAvailable: boolean;
+}
+
 function normalizeIdentity(value: string): string {
   return value
     .trim()
@@ -288,6 +299,53 @@ const CATALOG_RECORDS: readonly CatalogRecord[] = [
 
 const KNOWLEDGE_CATALOG = createKnowledgeCatalog(CATALOG_RECORDS);
 
+export function getPlantTaxonomyOptions(): readonly PlantTaxonomyOption[] {
+  const optionsByGenus = new Map<
+    string,
+    {
+      genus: string;
+      species: PlantSpeciesOption[];
+      genusLevelAvailable: boolean;
+    }
+  >();
+
+  for (const entry of KNOWLEDGE_CATALOG) {
+    let option = optionsByGenus.get(normalizeIdentity(entry.genus));
+    if (!option) {
+      option = {
+        genus: entry.genus,
+        species: [],
+        genusLevelAvailable: false,
+      };
+      optionsByGenus.set(normalizeIdentity(entry.genus), option);
+    }
+
+    if (entry.taxonomicLevel === 'GENUS') {
+      option.genusLevelAvailable = true;
+      continue;
+    }
+
+    const species = entry.species ?? '';
+    const genusPrefix = `${entry.genus} `;
+    const label = species.toLocaleLowerCase('en-US').startsWith(
+      genusPrefix.toLocaleLowerCase('en-US'),
+    )
+      ? species.slice(genusPrefix.length).trim()
+      : species;
+    option.species.push({
+      label: label.charAt(0).toLocaleUpperCase('en-US') + label.slice(1),
+      value: species,
+    });
+  }
+
+  return Object.freeze(
+    [...optionsByGenus.values()].map((option) => Object.freeze({
+      ...option,
+      species: Object.freeze(option.species),
+    })),
+  );
+}
+
 export function allCatalogEntries(): readonly KnowledgeEntry[] {
   return KNOWLEDGE_CATALOG;
 }
@@ -305,6 +363,17 @@ export function findPlantKnowledge(
         && normalizeIdentity(entry.species ?? '') === normalizedSpecies,
     )
     : undefined;
+  if (
+    speciesEntry
+    && normalizeIdentity(speciesEntry.genus) !== normalizedGenus
+  ) {
+    return {
+      status: 'UNSUPPORTED',
+      ...(query.species === undefined ? {} : { requestedSpecies: query.species }),
+      requestedGenus: query.genus,
+    };
+  }
+
   const genusEntry = KNOWLEDGE_CATALOG.find(
     (entry) => entry.taxonomicLevel === 'GENUS'
       && normalizeIdentity(entry.genus) === normalizedGenus,
