@@ -105,8 +105,22 @@ describe('application use cases', () => {
     );
 
     expect(updated.plant.displayName).toBe('Monstera Deluxe');
+    expect(updated.plant.species).toBe('Monstera deliciosa');
     expect(updated.care.fertilizerMode).toBe('LONG_TERM');
     expect((await store.schedules.get('plant-update'))?.careSchedules.WATERING).toBeDefined();
+
+    const changedToGenusLevel = await updatePlant(
+      {
+        id: 'plant-update',
+        genus: 'Sansevieria',
+        species: null,
+      },
+      store,
+    );
+
+    expect(changedToGenusLevel.plant.genus).toBe('Sansevieria');
+    expect(changedToGenusLevel.plant.taxonomicLevel).toBe('GENUS');
+    expect(changedToGenusLevel.plant.species).toBeUndefined();
 
     const deactivated = await updatePlant(
       {

@@ -40,7 +40,7 @@ export interface PlantUpdateInput {
   readonly id: string;
   readonly displayName?: string;
   readonly genus?: string;
-  readonly species?: string;
+  readonly species?: string | null;
   readonly fertilizerMode?: FertilizerMode;
   readonly schedulingEnabled?: boolean;
   readonly lastCompletedDate?: ISODateString;
@@ -210,14 +210,17 @@ export async function updatePlant(
     throw new PersistenceError('INVALID_DATA', 'Display name and genus are required');
   }
 
+  const nextSpecies = input.species === undefined
+    ? currentPlant.plant.species
+    : input.species ?? undefined;
   const lookup = findPlantKnowledge({
     genus: nextGenus,
-    species: input.species ?? currentPlant.plant.species,
+    species: nextSpecies,
   });
   if (lookup.status !== 'FOUND') {
     throw new PersistenceError(
       'INVALID_DATA',
-      `No plant knowledge is available for ${nextGenus}${input.species ?? currentPlant.plant.species ? ` ${input.species ?? currentPlant.plant.species}` : ''}`,
+      `No plant knowledge is available for ${nextGenus}${nextSpecies ? ` ${nextSpecies}` : ''}`,
     );
   }
 
@@ -226,7 +229,7 @@ export async function updatePlant(
     displayName: nextDisplayName,
     genus: lookup.entry.genus,
     species: lookup.entry.taxonomicLevel === 'SPECIES'
-      ? (input.species ?? currentPlant.plant.species ?? lookup.entry.species)
+      ? (nextSpecies ?? lookup.entry.species)
       : undefined,
     taxonomicLevel: lookup.entry.taxonomicLevel,
   };

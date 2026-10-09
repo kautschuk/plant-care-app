@@ -26,7 +26,8 @@ import {
   updatePlant,
 } from './src/application';
 import type { PlannerItem, PlannerPlantInput } from './src/application';
-import { findPlantKnowledge } from './src/domain/knowledge';
+import { PlantTaxonomySelector } from './src/components/PlantTaxonomySelector';
+import { findPlantKnowledge, getPlantTaxonomyOptions } from './src/domain/knowledge';
 import type { ISODateString } from './src/domain/scheduling/types';
 import type { PersistenceStore } from './src/domain/persistence/repositories';
 import type {
@@ -38,6 +39,15 @@ import type {
 const todayIso = (): ISODateString => new Date().toISOString().slice(0, 10) as ISODateString;
 const knowledgeOptions = ['beginner', 'intermediate', 'experienced'] as const;
 const commitmentOptions = ['casual', 'moderate', 'committed'] as const;
+const plantTaxonomyOptions = getPlantTaxonomyOptions();
+
+function isValidTaxonomySelection(genus: string, species: string | undefined): boolean {
+  const taxonomy = plantTaxonomyOptions.find((option) => option.genus === genus);
+  if (!taxonomy) return false;
+  return species
+    ? taxonomy.species.some((option) => option.value === species)
+    : taxonomy.genusLevelAvailable;
+}
 
 export default function App() {
   const [store, setStore] = useState<PersistenceStore | null>(null);
@@ -49,14 +59,14 @@ export default function App() {
   const [country, setCountry] = useState('United Kingdom');
   const [displayName, setDisplayName] = useState('Monstera');
   const [genus, setGenus] = useState('Monstera');
-  const [species, setSpecies] = useState('Monstera deliciosa');
+  const [species, setSpecies] = useState<string | undefined>('Monstera deliciosa');
   const [lastCompletedDate, setLastCompletedDate] = useState<string>(todayIso());
   const [lastFertilizingDate, setLastFertilizingDate] = useState<string>(todayIso());
   const [schedulingEnabled, setSchedulingEnabled] = useState(true);
   const [selectedPlantId, setSelectedPlantId] = useState<string | null>(null);
   const [draftPlantName, setDraftPlantName] = useState('');
   const [draftPlantGenus, setDraftPlantGenus] = useState('');
-  const [draftPlantSpecies, setDraftPlantSpecies] = useState('');
+  const [draftPlantSpecies, setDraftPlantSpecies] = useState<string | undefined>();
   const [draftFertilizerMode, setDraftFertilizerMode] = useState<'NONE' | 'LIQUID' | 'LONG_TERM'>('NONE');
   const [draftSchedulingEnabled, setDraftSchedulingEnabled] = useState(true);
   const [plannerItems, setPlannerItems] = useState<PlannerItem[]>([]);
@@ -147,7 +157,7 @@ export default function App() {
     if (!selectedPlant) return;
     setDraftPlantName(selectedPlant.plant.displayName);
     setDraftPlantGenus(selectedPlant.plant.genus);
-    setDraftPlantSpecies(selectedPlant.plant.species ?? '');
+    setDraftPlantSpecies(selectedPlant.plant.species);
     setDraftFertilizerMode(selectedPlant.care.fertilizerMode);
     setDraftSchedulingEnabled(selectedPlant.care.schedulingEnabled);
   }, [selectedPlant]);
@@ -257,6 +267,11 @@ export default function App() {
 
   const handleCreatePlant = async () => {
     if (!store) return;
+    if (!isValidTaxonomySelection(genus, species)) {
+      setErrorMessage('Choose a supported genus and species or genus-level guidance.');
+      setStatusMessage(null);
+      return;
+    }
 
     try {
       setErrorMessage(null);
@@ -266,7 +281,7 @@ export default function App() {
           id: `plant-${Date.now()}`,
           displayName,
           genus,
-          species: species.trim() || undefined,
+          species,
           fertilizerMode: 'LIQUID',
           schedulingEnabled,
           lastCompletedDate: lastCompletedDate as any,
@@ -277,8 +292,8 @@ export default function App() {
       setPlants((current) => [...current, { plant: created.plant, care: created.care }]);
       setSelectedPlantId(created.plant.id);
       setDisplayName('');
-      setGenus('');
-      setSpecies('');
+      setGenus('Monstera');
+      setSpecies('Monstera deliciosa');
       setStatusMessage(`Added ${created.plant.displayName}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Could not create plant.';
@@ -289,6 +304,11 @@ export default function App() {
 
   const handleUpdatePlant = async () => {
     if (!store || !selectedPlant) return;
+    if (!isValidTaxonomySelection(draftPlantGenus, draftPlantSpecies)) {
+      setErrorMessage('Choose a supported genus and species or genus-level guidance.');
+      setStatusMessage(null);
+      return;
+    }
 
     try {
       setErrorMessage(null);
@@ -298,7 +318,7 @@ export default function App() {
           id: selectedPlant.plant.id,
           displayName: draftPlantName,
           genus: draftPlantGenus,
-          species: draftPlantSpecies.trim() || undefined,
+          species: draftPlantSpecies ?? null,
           fertilizerMode: draftFertilizerMode,
           schedulingEnabled: draftSchedulingEnabled,
         },
@@ -502,12 +522,11 @@ export default function App() {
             value={displayName}
             onChangeText={setDisplayName}
           />
-          <TextInput style={styles.input} placeholder="Genus" value={genus} onChangeText={setGenus} />
-          <TextInput
-            style={styles.input}
-            placeholder="Species (optional)"
-            value={species}
-            onChangeText={setSpecies}
+          <PlantTaxonomySelector
+            genus={genus}
+            species={species}
+            onGenusChange={setGenus}
+            onSpeciesChange={setSpecies}
           />
           <TextInput
             style={styles.input}
@@ -526,7 +545,11 @@ export default function App() {
             <Text>Enable scheduling</Text>
             <Switch value={schedulingEnabled} onValueChange={setSchedulingEnabled} />
           </View>
-          <Button title="Create plant" onPress={handleCreatePlant} />
+          <Button
+            title="Create plant"
+            disabled={!isValidTaxonomySelection(genus, species)}
+            onPress={handleCreatePlant}
+          />
         </View>
       ) : (
         <Text style={styles.muted}>Complete household setup to add your first plant.</Text>
@@ -678,17 +701,11 @@ export default function App() {
               value={draftPlantName}
               onChangeText={setDraftPlantName}
             />
-            <TextInput
-              style={styles.input}
-              placeholder="Genus"
-              value={draftPlantGenus}
-              onChangeText={setDraftPlantGenus}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Species"
-              value={draftPlantSpecies}
-              onChangeText={setDraftPlantSpecies}
+            <PlantTaxonomySelector
+              genus={draftPlantGenus}
+              species={draftPlantSpecies}
+              onGenusChange={setDraftPlantGenus}
+              onSpeciesChange={setDraftPlantSpecies}
             />
 
             <Text style={styles.label}>Fertilizer mode</Text>
@@ -711,7 +728,11 @@ export default function App() {
               <Switch value={draftSchedulingEnabled} onValueChange={setDraftSchedulingEnabled} />
             </View>
 
-            <Button title="Save plant details" onPress={handleUpdatePlant} />
+            <Button
+              title="Save plant details"
+              disabled={!isValidTaxonomySelection(draftPlantGenus, draftPlantSpecies)}
+              onPress={handleUpdatePlant}
+            />
           </View>
 
           <View style={styles.actionRow}>
