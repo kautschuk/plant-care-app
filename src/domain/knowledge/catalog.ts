@@ -270,6 +270,16 @@ const CATALOG_RECORDS: readonly CatalogRecord[] = [
     seasonFor: (climate, today) => seasonForCatalogRecord('YEAR_ROUND', climate, today),
   },
   {
+    genus: 'Monstera',
+    species: 'Monstera dubia',
+    taxonomicLevel: 'SPECIES',
+    seasonalModel: 'YEAR_ROUND',
+    wateringIntervals: yearRoundIntervals({ TROPICAL: 7, ARID: 14, MEDITERRANEAN: 10, TEMPERATE: 14, CONTINENTAL: 18, POLAR: 21 }),
+    fertilizerModes: ['NONE'],
+    fertilizationApplicable: false,
+    seasonFor: (climate, today) => seasonForCatalogRecord('YEAR_ROUND', climate, today),
+  },
+  {
     genus: 'Sansevieria',
     taxonomicLevel: 'GENUS',
     seasonalModel: 'YEAR_ROUND',

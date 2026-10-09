@@ -118,6 +118,19 @@ describe('climate resolution contracts', () => {
     }
   });
 
+  it('uses the approved Monstera adansonii profile for Monstera dubia', () => {
+    const result = findPlantKnowledge({
+      genus: 'Monstera',
+      species: 'Monstera dubia',
+    });
+
+    expect(result.status).toBe('FOUND');
+    if (result.status === 'FOUND') {
+      expect(result.entry.taxonomicLevel).toBe('SPECIES');
+      expect(result.entry.species).toBe('Monstera dubia');
+    }
+  });
+
   it('returns genus guidance when species knowledge is unavailable', () => {
     const result = findPlantKnowledge({
       species: 'Sansevieria trifasciata',

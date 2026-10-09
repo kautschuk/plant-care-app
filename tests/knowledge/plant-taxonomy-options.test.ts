@@ -21,6 +21,7 @@ describe('plant taxonomy options', () => {
     expect(monstera?.species).toEqual([
       { label: 'Deliciosa', value: 'Monstera deliciosa' },
       { label: 'Adansonii', value: 'Monstera adansonii' },
+      { label: 'Dubia', value: 'Monstera dubia' },
     ]);
     expect(monstera?.species).not.toContainEqual(
       expect.objectContaining({ label: 'trifasciata' }),
