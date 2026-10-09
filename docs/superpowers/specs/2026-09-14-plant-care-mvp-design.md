@@ -13,7 +13,7 @@ The MVP works offline, requires no account, and keeps scheduling independent fro
 
 ### Included
 
-- Onboarding for care knowledge, commitment level, and one household location entered as city and country.
+- Onboarding for care knowledge and commitment level.
 - Species-first plant search with genus-level fallback.
 - Progressive plant setup with name, recognized genus/species, photo, and care schedule.
 - Optional plant details: pot size, soil type, light level, purchase date, and notes.
@@ -26,7 +26,6 @@ The MVP works offline, requires no account, and keeps scheduling independent fro
 - Independent journaling for watering, fertilizing, repotting, and propagation.
 - Editing and deletion of journal entries.
 - Archived plant memorials with restoration and permanent deletion.
-- Seasonal learned schedule adjustments per plant and care type.
 
 ### Deferred
 
@@ -36,6 +35,13 @@ The MVP works offline, requires no account, and keeps scheduling independent fro
 - Repotting, propagation, pruning, pest checks, and other scheduled workflows.
 - Standalone notes, event notes, photos beyond the plant profile, and richer observations.
 - Adjustment history, undo, recovery, advanced manual interval editing, and internal model history.
+
+### On Ice
+
+These capabilities are retained in the domain and persistence layers but hidden from the MVP UI:
+
+- Climate-aware care guidance, including household location entry and climate display.
+- Seasonal adaptive schedules that learn per plant and care type, including user feedback controls and seasonal guidance summaries.
 
 ## Users and Preferences
 

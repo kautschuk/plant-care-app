@@ -223,23 +223,6 @@ export default function App() {
     }))
     .filter((group) => group.plants.length > 0);
 
-  const seasonalPlantCounts = { growing: 0, dormant: 0, yearRound: 0 };
-  if (settings) {
-    for (const { plant, care } of plants) {
-      if (plant.archived || !care.schedulingEnabled) continue;
-
-      const lookup = findPlantKnowledge({ genus: plant.genus, species: plant.species });
-      if (lookup.status !== 'FOUND') continue;
-      if (lookup.entry.seasonalModel === 'YEAR_ROUND') {
-        seasonalPlantCounts.yearRound += 1;
-        continue;
-      }
-
-      const season = lookup.entry.seasonFor(settings.climate, todayIso());
-      seasonalPlantCounts[season === 'GROWING' ? 'growing' : 'dormant'] += 1;
-    }
-  }
-
   const householdStatusMessage = householdReady
     ? `Ready to care: ${scheduledPlantCount} plant${scheduledPlantCount === 1 ? '' : 's'} ${scheduledPlantCount === 1 ? 'has' : 'have'} an active schedule.`
     : plants.length > 0
@@ -357,7 +340,7 @@ export default function App() {
   const handleScheduleAction = async (
     plantId: string,
     careType: 'WATERING' | 'FERTILIZING',
-    action: { type: 'POSTPONE'; days: number } | { type: 'FEEDBACK_LATER' } | { type: 'FEEDBACK_EARLIER' },
+    action: { type: 'POSTPONE'; days: number },
   ) => {
     if (!store || plannerActionInFlight.current) return;
     plannerActionInFlight.current = true;
@@ -365,11 +348,7 @@ export default function App() {
 
     try {
       setErrorMessage(null);
-      const label = action.type === 'POSTPONE'
-        ? `postponing ${careType.toLowerCase()} by ${action.days} days`
-        : action.type === 'FEEDBACK_LATER'
-          ? `marking ${careType.toLowerCase()} as later than expected`
-          : `marking ${careType.toLowerCase()} as earlier than expected`;
+      const label = `postponing ${careType.toLowerCase()} by ${action.days} days`;
       setStatusMessage(`Updating ${label}…`);
       await applyPlantScheduleAction(
         {
@@ -428,9 +407,6 @@ export default function App() {
 
       <View style={styles.card}>
         <Text style={styles.sectionTitle}>{settings ? 'Household profile' : 'Set up your home'}</Text>
-        <Text style={styles.cardText}>
-          Tell us where you keep your plants so care timing reflects your local climate.
-        </Text>
 
         <Text style={styles.label}>Knowledge level</Text>
         <View style={styles.choiceGrid}>
@@ -462,23 +438,7 @@ export default function App() {
           ))}
         </View>
 
-        <TextInput style={styles.input} placeholder="City" value={city} onChangeText={setCity} />
-        <TextInput
-          style={styles.input}
-          placeholder="Country"
-          value={country}
-          onChangeText={setCountry}
-        />
         <Button title={settings ? 'Update household' : 'Save household'} onPress={handleSaveSettings} />
-
-        {settings ? (
-          <View style={styles.summaryBox}>
-            <Text style={styles.summaryTitle}>Climate</Text>
-            <Text>
-              {settings.climate} ({settings.climateUsedFallback ? 'estimated' : 'resolved'})
-            </Text>
-          </View>
-        ) : null}
       </View>
 
       {settings ? (
@@ -504,11 +464,6 @@ export default function App() {
           </View>
           <Text style={styles.statusNote}>
             {householdStatusMessage}
-          </Text>
-          <Text style={styles.muted}>
-            {scheduledPlantCount === 0
-              ? 'Add an active care schedule to see seasonal guidance.'
-              : `Seasonal care: ${seasonalPlantCounts.growing} plant${seasonalPlantCounts.growing === 1 ? '' : 's'} currently use growing-season intervals, ${seasonalPlantCounts.dormant} use dormant-season intervals, and ${seasonalPlantCounts.yearRound} use year-round guidance.`}
           </Text>
         </View>
       ) : null}
@@ -636,16 +591,6 @@ export default function App() {
                                 onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'POSTPONE', days })}
                               />
                             ))}
-                            <Button
-                              title="Later"
-                              disabled={isPlannerActionPending}
-                              onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_LATER' })}
-                            />
-                            <Button
-                              title="Earlier"
-                              disabled={isPlannerActionPending}
-                              onPress={() => handleScheduleAction(item.plantId, item.careType, { type: 'FEEDBACK_EARLIER' })}
-                            />
                           </View>
                           <Text style={styles.label}>
                             Custom postponement (maximum {item.effectiveIntervalDays} days)
