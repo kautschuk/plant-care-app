@@ -2,7 +2,10 @@ export {
   applyPlantScheduleAction,
   archivePlant,
   createPlant,
+  createCareEvent,
   deletePlant,
+  deleteCareEvent,
+  editCareEvent,
   recordCareCompletion,
   restorePlant,
   saveHouseholdSettings,
@@ -16,6 +19,7 @@ export {
 } from './planner';
 
 export type {
+  CareEventInput,
   CareCompletionResult,
   HouseholdSetupInput,
   HouseholdSettingsResult,

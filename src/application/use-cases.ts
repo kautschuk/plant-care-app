@@ -2,6 +2,7 @@ import { PersistenceError } from '../domain/persistence/errors';
 import type { PersistenceStore } from '../domain/persistence/repositories';
 import type {
   CareEvent,
+  CareEventType,
   HouseholdSettings,
   PlantCareConfiguration,
   PlantRecord,
@@ -58,6 +59,14 @@ export interface PlantCareActionInput {
 export interface PlantScheduleActionInput {
   readonly plantId: string;
   readonly action: ScheduleAction;
+  readonly today?: ISODateString;
+}
+
+export interface CareEventInput {
+  readonly id: string;
+  readonly plantId: string;
+  readonly type: CareEventType;
+  readonly date?: ISODateString;
   readonly today?: ISODateString;
 }
 
@@ -391,6 +400,57 @@ export async function recordCareCompletion(
   return { schedule: result.schedule, events: result.events };
 }
 
+export async function createCareEvent(
+  input: CareEventInput,
+  store?: PersistenceStore,
+): Promise<CareEvent> {
+  const resolvedStore = store ?? await defaultStore();
+  await requireActiveJournalPlant(input.plantId, resolvedStore);
+  const today = validateJournalDate(input.today ?? currentISODate());
+  const event: CareEvent = {
+    id: input.id,
+    plantId: input.plantId,
+    type: input.type,
+    date: validateJournalDate(input.date ?? today, today),
+  };
+  await resolvedStore.careEvents.save(event);
+  return event;
+}
+
+export async function editCareEvent(
+  input: CareEventInput,
+  store?: PersistenceStore,
+): Promise<CareEvent> {
+  const resolvedStore = store ?? await defaultStore();
+  await requireActiveJournalPlant(input.plantId, resolvedStore);
+  const existingEvents = await resolvedStore.careEvents.listForPlant(input.plantId);
+  if (!existingEvents.some((event) => event.id === input.id)) {
+    throw new PersistenceError('NOT_FOUND', `Care event ${input.id} was not found`);
+  }
+
+  const today = validateJournalDate(input.today ?? currentISODate());
+  const event: CareEvent = {
+    id: input.id,
+    plantId: input.plantId,
+    type: input.type,
+    date: validateJournalDate(input.date ?? today, today),
+  };
+  await resolvedStore.careEvents.save(event);
+  return event;
+}
+
+export async function deleteCareEvent(
+  plantId: string,
+  eventId: string,
+  store?: PersistenceStore,
+): Promise<boolean> {
+  const resolvedStore = store ?? await defaultStore();
+  await requireActiveJournalPlant(plantId, resolvedStore);
+  const events = await resolvedStore.careEvents.listForPlant(plantId);
+  if (!events.some((event) => event.id === eventId)) return false;
+  return resolvedStore.careEvents.delete(eventId);
+}
+
 export async function archivePlant(
   plantId: string,
   store?: PersistenceStore,
@@ -426,6 +486,32 @@ function normalizeISODate(
   return next as ISODateString;
 }
 
+async function requireActiveJournalPlant(
+  plantId: string,
+  store: PersistenceStore,
+): Promise<void> {
+  const result = await store.plants.get(plantId);
+  if (!result) {
+    throw new PersistenceError('NOT_FOUND', `Plant ${plantId} was not found`);
+  }
+  if (result.plant.archived) {
+    throw new PersistenceError('INVALID_DATA', 'Archived plant history is read-only');
+  }
+}
+
+function validateJournalDate(value: string, today?: ISODateString): ISODateString {
+  try {
+    if (today) validateISODate(today);
+    return validateISODate(value, today);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Date must be a valid ISO calendar date';
+    throw new PersistenceError('INVALID_DATA', message, error);
+  }
+}
+
 function currentISODate(): ISODateString {
-  return new Date().toISOString().slice(0, 10) as ISODateString;
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}` as ISODateString;
 }

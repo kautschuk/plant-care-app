@@ -9,7 +9,10 @@ import {
   applyPlantScheduleAction,
   archivePlant,
   createPlant,
+  createCareEvent,
   deletePlant,
+  deleteCareEvent,
+  editCareEvent,
   recordCareCompletion,
   restorePlant,
   saveHouseholdSettings,
@@ -184,6 +187,161 @@ describe('application use cases', () => {
         .map((event) => event.type)
         .sort(),
     ).toEqual(['FERTILIZING', 'WATERING']);
+  });
+
+  it('creates, edits, and deletes journal events without changing schedules', async () => {
+    const database = await createSqliteTestDriver();
+    await initializeSchema(database);
+    const store = createPersistenceStore(database);
+
+    await saveHouseholdSettings(
+      {
+        knowledgeLevel: 'beginner',
+        commitmentLevel: 'moderate',
+        city: 'London',
+        country: 'United Kingdom',
+      },
+      store,
+    );
+    await createPlant(
+      {
+        id: 'plant-journal',
+        displayName: 'Monstera',
+        genus: 'Monstera',
+        species: 'Monstera deliciosa',
+        schedulingEnabled: true,
+        today: '2026-10-08' as ISODateString,
+        lastCompletedDate: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+    const originalSchedule = await store.schedules.get('plant-journal');
+
+    const first = await createCareEvent(
+      {
+        id: 'event-journal-1',
+        plantId: 'plant-journal',
+        type: 'WATERING',
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+    const second = await createCareEvent(
+      {
+        id: 'event-journal-2',
+        plantId: 'plant-journal',
+        type: 'FERTILIZING',
+        date: '2026-10-08' as ISODateString,
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+
+    expect(first.date).toBe('2026-10-08');
+    expect(await store.careEvents.listForPlant('plant-journal')).toEqual([
+      first,
+      second,
+    ]);
+
+    const edited = await editCareEvent(
+      {
+        id: second.id,
+        plantId: 'plant-journal',
+        type: 'REPOTTING',
+        date: '2026-10-07' as ISODateString,
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+    expect(edited).toEqual({
+      ...second,
+      type: 'REPOTTING',
+      date: '2026-10-07',
+    });
+
+    await expect(
+      editCareEvent(
+        {
+          id: second.id,
+          plantId: 'plant-journal',
+          type: 'PROPAGATION',
+          date: '2026-10-09' as ISODateString,
+          today: '2026-10-08' as ISODateString,
+        },
+        store,
+      ),
+    ).rejects.toMatchObject({
+      code: 'INVALID_DATA',
+      message: 'Date cannot be in the future',
+    });
+    await expect(
+      createCareEvent(
+        {
+          id: 'event-journal-future',
+          plantId: 'plant-journal',
+          type: 'PROPAGATION',
+          date: '2026-10-09' as ISODateString,
+          today: '2026-10-08' as ISODateString,
+        },
+        store,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_DATA' });
+
+    expect(await deleteCareEvent('plant-journal', first.id, store)).toBe(true);
+    expect(await store.careEvents.listForPlant('plant-journal')).toEqual([edited]);
+    expect(await store.schedules.get('plant-journal')).toEqual(originalSchedule);
+  });
+
+  it('keeps archived plant journal history read-only', async () => {
+    const database = await createSqliteTestDriver();
+    await initializeSchema(database);
+    const store = createPersistenceStore(database);
+    await createPlant(
+      {
+        id: 'plant-archived-journal',
+        displayName: 'Monstera',
+        genus: 'Monstera',
+        species: 'Monstera deliciosa',
+      },
+      store,
+    );
+    const event = await createCareEvent(
+      {
+        id: 'event-archived-journal',
+        plantId: 'plant-archived-journal',
+        type: 'WATERING',
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+    await archivePlant('plant-archived-journal', store);
+
+    await expect(
+      createCareEvent(
+        {
+          id: 'event-archived-new',
+          plantId: 'plant-archived-journal',
+          type: 'PROPAGATION',
+          today: '2026-10-08' as ISODateString,
+        },
+        store,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_DATA' });
+    await expect(
+      editCareEvent(
+        {
+          id: event.id,
+          plantId: 'plant-archived-journal',
+          type: 'REPOTTING',
+          today: '2026-10-08' as ISODateString,
+        },
+        store,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_DATA' });
+    await expect(
+      deleteCareEvent('plant-archived-journal', event.id, store),
+    ).rejects.toMatchObject({ code: 'INVALID_DATA' });
+    expect(await store.careEvents.listForPlant('plant-archived-journal')).toEqual([event]);
   });
 
   it('applies postponement and feedback actions through the app layer', async () => {

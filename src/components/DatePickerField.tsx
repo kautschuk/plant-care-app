@@ -7,6 +7,7 @@ interface DatePickerFieldProps {
   readonly label: string;
   readonly value: string;
   readonly onChange: (value: string) => void;
+  readonly maximumDate?: string;
 }
 
 function toDate(value: string): Date {
@@ -20,7 +21,12 @@ function toISODate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-export function DatePickerField({ label, value, onChange }: DatePickerFieldProps) {
+export function DatePickerField({
+  label,
+  value,
+  onChange,
+  maximumDate,
+}: DatePickerFieldProps) {
   const [isPickerVisible, setIsPickerVisible] = useState(false);
 
   const handleChange = (_event: DateTimePickerChangeEvent, date: Date) => {
@@ -37,6 +43,7 @@ export function DatePickerField({ label, value, onChange }: DatePickerFieldProps
           onChange: (event) => {
             if (event.currentTarget.value) onChange(event.currentTarget.value);
           },
+          max: maximumDate,
           style: {
             backgroundColor: '#fff',
             border: '1px solid #dfe9df',
@@ -66,6 +73,7 @@ export function DatePickerField({ label, value, onChange }: DatePickerFieldProps
               <DateTimePicker
                 display={Platform.OS === 'ios' ? 'spinner' : 'default'}
                 mode="date"
+                maximumDate={maximumDate ? toDate(maximumDate) : undefined}
                 onDismiss={() => setIsPickerVisible(false)}
                 onValueChange={handleChange}
                 value={toDate(value)}
