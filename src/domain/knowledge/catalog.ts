@@ -241,6 +241,155 @@ function seasonalIntervals(
   ) as IntervalByClimate;
 }
 
+
+type CommonCareProfile = 'MOIST' | 'MODERATE' | 'DRY' | 'ORCHID';
+
+const COMMON_SPECIES: readonly (readonly [string, string, CommonCareProfile])[] = [
+  ['Aglaonema', 'commutatum', 'MODERATE'],
+  ['Alocasia', 'amazonica', 'MOIST'],
+  ['Alocasia', 'macrorrhizos', 'MOIST'],
+  ['Anthurium', 'andraeanum', 'MOIST'],
+  ['Anthurium', 'clarinervium', 'MODERATE'],
+  ['Anthurium', 'crystallinum', 'MOIST'],
+  ['Araucaria', 'heterophylla', 'MODERATE'],
+  ['Aspidistra', 'elatior', 'MODERATE'],
+  ['Asplenium', 'nidus', 'MOIST'],
+  ['Beaucarnea', 'recurvata', 'DRY'],
+  ['Begonia', 'maculata', 'MODERATE'],
+  ['Begonia', 'rex', 'MOIST'],
+  ['Calathea', 'orbifolia', 'MOIST'],
+  ['Calathea', 'ornata', 'MOIST'],
+  ['Calathea', 'makoyana', 'MOIST'],
+  ['Ceropegia', 'woodii', 'DRY'],
+  ['Chamaedorea', 'elegans', 'MODERATE'],
+  ['Chlorophytum', 'comosum', 'MODERATE'],
+  ['Cissus', 'rhombifolia', 'MODERATE'],
+  ['Clivia', 'miniata', 'DRY'],
+  ['Codiaeum', 'variegatum', 'MOIST'],
+  ['Coffea', 'arabica', 'MOIST'],
+  ['Crassula', 'ovata', 'DRY'],
+  ['Dieffenbachia', 'seguine', 'MOIST'],
+  ['Dionaea', 'muscipula', 'MOIST'],
+  ['Dracaena', 'fragrans', 'MODERATE'],
+  ['Dracaena', 'trifasciata', 'DRY'],
+  ['Epipremnum', 'aureum', 'MODERATE'],
+  ['Epiphyllum', 'anguliger', 'MODERATE'],
+  ['Euphorbia', 'trigona', 'DRY'],
+  ['Fatsia', 'japonica', 'MODERATE'],
+  ['Ficus', 'benjamina', 'MODERATE'],
+  ['Ficus', 'elastica', 'MODERATE'],
+  ['Ficus', 'lyrata', 'MODERATE'],
+  ['Fittonia', 'albivenis', 'MOIST'],
+  ['Guzmania', 'lingulata', 'MODERATE'],
+  ['Haworthiopsis', 'attenuata', 'DRY'],
+  ['Hedera', 'helix', 'MODERATE'],
+  ['Hoya', 'carnosa', 'DRY'],
+  ['Hoya', 'pubicalyx', 'DRY'],
+  ['Kalanchoe', 'blossfeldiana', 'DRY'],
+  ['Maranta', 'leuconeura', 'MOIST'],
+  ['Musa', 'acuminata', 'MOIST'],
+  ['Nephrolepis', ' exaltata', 'MOIST'],
+  ['Pachira', 'aquatica', 'MODERATE'],
+  ['Pachypodium', 'lamerei', 'DRY'],
+  ['Peperomia', 'obtusifolia', 'MODERATE'],
+  ['Peperomia', 'argyreia', 'MODERATE'],
+  ['Philodendron', 'hederaceum', 'MODERATE'],
+  ['Philodendron', 'erubescens', 'MODERATE'],
+  ['Philodendron', 'bipinnatifidum', 'MODERATE'],
+  ['Philodendron', 'gloriosum', 'MOIST'],
+  ['Philodendron', 'micans', 'MODERATE'],
+  ['Pilea', 'peperomioides', 'MODERATE'],
+  ['Pilea', 'cadierei', 'MODERATE'],
+  ['Pinguicula', 'moranensis', 'MOIST'],
+  ['Plectranthus', 'verticillatus', 'MODERATE'],
+  ['Platycerium', 'bifurcatum', 'MODERATE'],
+  ['Schlumbergera', 'truncata', 'MODERATE'],
+  ['Scindapsus', 'pictus', 'MODERATE'],
+  ['Sedum', 'morganianum', 'DRY'],
+  ['Senecio', 'rowleyanus', 'DRY'],
+  ['Spathiphyllum', 'wallisii', 'MOIST'],
+  ['Strelitzia', 'nicolai', 'MODERATE'],
+  ['Stromanthe', 'sanguinea', 'MOIST'],
+  ['Syngonium', 'podophyllum', 'MODERATE'],
+  ['Tradescantia', 'zebrina', 'MODERATE'],
+  ['Zamioculcas', ' zamiifolia', 'DRY'],
+  ['Adenium', 'obesum', 'DRY'],
+  ['Aloe', 'vera', 'DRY'],
+  ['Aporocactus', 'flagelliformis', 'DRY'],
+  ['Astrophytum', 'ornatum', 'DRY'],
+  ['Echinopsis', 'oxygona', 'DRY'],
+  ['Gymnocalycium', 'mihanovichii', 'DRY'],
+  ['Mammillaria', 'elongata', 'DRY'],
+  ['Opuntia', 'microdasys', 'DRY'],
+  ['Schlumbergera', 'bridgesii', 'MODERATE'],
+  ['Selenicereus', 'undatus', 'MODERATE'],
+  ['Phalaenopsis', 'amabilis', 'ORCHID'],
+  ['Dendrobium', 'nobile', 'ORCHID'],
+  ['Oncidium', 'altissimum', 'ORCHID'],
+  ['Paphiopedilum', 'insigne', 'ORCHID'],
+  ['Cymbidium', 'goeringii', 'ORCHID'],
+  ['Cattleya', 'labiata', 'ORCHID'],
+  ['Tillandsia', 'ionantha', 'MODERATE'],
+  ['Dracaena', 'sanderiana', 'MODERATE'],
+  ['Ficus', 'microcarpa', 'MODERATE'],
+  ['Schefflera', 'arboricola', 'MODERATE'],
+  ['Polyscias', 'fruticosa', 'MODERATE'],
+  ['Rhapis', 'excelsa', 'MODERATE'],
+  ['Howea', 'forsteriana', 'MODERATE'],
+  ['Ctenanthe', 'setosa', 'MOIST'],
+  ['Goeppertia', 'rufibarba', 'MOIST'],
+  ['Hypoestes', 'phyllostachya', 'MOIST'],
+  ['Oxalis', 'triangularis', 'MODERATE'],
+  ['Pelargonium', 'graveolens', 'DRY'],
+  ['Passiflora', 'caerulea', 'MODERATE'],
+];
+
+function commonSpeciesRecords(): readonly CatalogRecord[] {
+  const wateringByProfile: Readonly<Record<CommonCareProfile, {
+    growing: Readonly<Record<ClimateClassification, number>>;
+    dormant: Readonly<Record<ClimateClassification, number>>;
+  }>> = {
+    MOIST: {
+      growing: { TROPICAL: 4, ARID: 6, MEDITERRANEAN: 6, TEMPERATE: 8, CONTINENTAL: 9, POLAR: 11 },
+      dormant: { TROPICAL: 7, ARID: 10, MEDITERRANEAN: 10, TEMPERATE: 14, CONTINENTAL: 16, POLAR: 20 },
+    },
+    MODERATE: {
+      growing: { TROPICAL: 6, ARID: 9, MEDITERRANEAN: 8, TEMPERATE: 10, CONTINENTAL: 12, POLAR: 14 },
+      dormant: { TROPICAL: 10, ARID: 14, MEDITERRANEAN: 14, TEMPERATE: 18, CONTINENTAL: 21, POLAR: 28 },
+    },
+    DRY: {
+      growing: { TROPICAL: 10, ARID: 14, MEDITERRANEAN: 14, TEMPERATE: 18, CONTINENTAL: 21, POLAR: 28 },
+      dormant: { TROPICAL: 18, ARID: 28, MEDITERRANEAN: 28, TEMPERATE: 35, CONTINENTAL: 42, POLAR: 56 },
+    },
+    ORCHID: {
+      growing: { TROPICAL: 6, ARID: 8, MEDITERRANEAN: 8, TEMPERATE: 10, CONTINENTAL: 12, POLAR: 14 },
+      dormant: { TROPICAL: 9, ARID: 12, MEDITERRANEAN: 12, TEMPERATE: 14, CONTINENTAL: 18, POLAR: 21 },
+    },
+  };
+
+  return COMMON_SPECIES.map(([genus, epithet, profile]) => {
+    const water = wateringByProfile[profile];
+    const fertilizerGrowing = profile === 'DRY'
+      ? { TROPICAL: 30, ARID: 42, MEDITERRANEAN: 42, TEMPERATE: 56, CONTINENTAL: 56, POLAR: 70 }
+      : { TROPICAL: 14, ARID: 21, MEDITERRANEAN: 21, TEMPERATE: 28, CONTINENTAL: 28, POLAR: 35 };
+    const fertilizerDormant = profile === 'DRY'
+      ? { TROPICAL: 60, ARID: 84, MEDITERRANEAN: 84, TEMPERATE: 100, CONTINENTAL: 112, POLAR: 120 }
+      : { TROPICAL: 35, ARID: 42, MEDITERRANEAN: 42, TEMPERATE: 56, CONTINENTAL: 70, POLAR: 84 };
+
+    return {
+      genus,
+      species: `${genus} ${epithet.trim()}`,
+      taxonomicLevel: 'SPECIES',
+      seasonalModel: 'GROWING_DORMANT',
+      wateringIntervals: seasonalIntervals(water.growing, water.dormant),
+      fertilizingIntervals: seasonalIntervals(fertilizerGrowing, fertilizerDormant),
+      fertilizerModes: ['LIQUID'],
+      fertilizationApplicable: true,
+      seasonFor: (climate, today) => seasonForCatalogRecord('GROWING_DORMANT', climate, today),
+    } satisfies CatalogRecord;
+  });
+}
+
 const CATALOG_RECORDS: readonly CatalogRecord[] = [
   {
     genus: 'Monstera',
@@ -305,6 +454,7 @@ const CATALOG_RECORDS: readonly CatalogRecord[] = [
     fertilizationApplicable: true,
     seasonFor: (climate, today) => seasonForCatalogRecord('GROWING_DORMANT', climate, today),
   },
+  ...commonSpeciesRecords(),
 ];
 
 const KNOWLEDGE_CATALOG = createKnowledgeCatalog(CATALOG_RECORDS);
