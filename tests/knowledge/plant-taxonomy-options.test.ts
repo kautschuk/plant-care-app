@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getPlantTaxonomyOptions, findPlantKnowledge, allCatalogEntries } from '../../src/domain/knowledge';
+import { getPlantTaxonomyOptions, findPlantKnowledge } from '../../src/domain/knowledge';
+import { allCatalogEntries } from '../../src/domain/knowledge/catalog';
 
 describe('plant taxonomy options', () => {
   it('includes every catalog genus once and preserves common plant coverage', () => {
