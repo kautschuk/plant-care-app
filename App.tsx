@@ -41,6 +41,7 @@ import type {
   PlantCareConfiguration,
   PlantRecord,
 } from './src/domain/persistence/types';
+import { activeScreen, goBack, pushScreen, switchPrimaryScreen, type AppScreen } from './src/navigation/navigationState';
 
 const todayIso = (): ISODateString => {
   const date = new Date();
@@ -68,6 +69,12 @@ function isValidTaxonomySelection(genus: string, species: string | undefined): b
 
 export default function App() {
   const [store, setStore] = useState<PersistenceStore | null>(null);
+  const [screenStack, setScreenStack] = useState<AppScreen[]>(['today']);
+  const [journalEvents, setJournalEvents] = useState<Array<{ event: CareEvent; plantName: string; archived: boolean }>>([]);
+  const currentScreen = activeScreen(screenStack);
+  const navigatePrimary = (screen: 'today' | 'plants' | 'journal') => setScreenStack((current) => switchPrimaryScreen(current, screen));
+  const openScreen = (screen: AppScreen) => setScreenStack((current) => pushScreen(current, screen));
+  const handleBack = () => setScreenStack((current) => goBack(current));
   const [settings, setSettings] = useState<HouseholdSettings | null>(null);
   const [plants, setPlants] = useState<ReadonlyArray<{ plant: PlantRecord; care: PlantCareConfiguration }>>([]);
   const [knowledgeLevel, setKnowledgeLevel] = useState<(typeof knowledgeOptions)[number]>('beginner');
@@ -178,6 +185,20 @@ export default function App() {
     () => plants.find(({ plant }) => plant.id === selectedPlantId) ?? null,
     [plants, selectedPlantId],
   );
+
+  useEffect(() => {
+    if (!store || currentScreen !== 'journal') return;
+    let active = true;
+    void (async () => {
+      try {
+        const entries = await Promise.all(plants.map(async ({ plant }) => ({ plant, events: await store.careEvents.listForPlant(plant.id) })));
+        if (active) setJournalEvents(entries.flatMap(({ plant, events }) => events.map((event) => ({ event, plantName: plant.displayName, archived: plant.archived }))).sort((a, b) => b.event.date.localeCompare(a.event.date)));
+      } catch (error) {
+        if (active) { setErrorMessage(error instanceof Error ? error.message : 'Could not load journal.'); setStatusMessage(null); }
+      }
+    })();
+    return () => { active = false; };
+  }, [store, plants, currentScreen]);
 
   useEffect(() => {
     if (!store || !selectedPlant) {
@@ -535,14 +556,19 @@ export default function App() {
   };
 
   return (
+    <View style={styles.appShell}>
     <ScrollView contentContainerStyle={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      <Text style={styles.title}>Plant Care</Text>
+      <View style={styles.headerRow}>
+        {screenStack.length > 1 ? <Pressable accessibilityRole="button" onPress={handleBack} style={styles.headerAction}><Text style={styles.headerActionText}>Back</Text></Pressable> : <View style={styles.headerSpacer} />}
+        <Text style={styles.title}>Plant Care</Text>
+        <Pressable accessibilityRole="button" onPress={() => openScreen('settings')} style={styles.headerAction}><Text style={styles.headerActionText}>Settings</Text></Pressable>
+      </View>
       {statusMessage ? <Text style={styles.notice}>{statusMessage}</Text> : null}
       {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
 
-      <View style={styles.card}>
+      {currentScreen === 'settings' || (!settings && currentScreen === 'today') ? <View style={styles.card}>
         <Text style={styles.sectionTitle}>{settings ? 'Household profile' : 'Set up your home'}</Text>
 
         <Text style={styles.label}>Knowledge level</Text>
@@ -576,9 +602,9 @@ export default function App() {
         </View>
 
         <Button title={settings ? 'Update household' : 'Save household'} onPress={handleSaveSettings} />
-      </View>
+      </View> : null}
 
-      {settings ? (
+      {currentScreen === 'today' && settings ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Daily care overview</Text>
           <View style={styles.summaryGrid}>
@@ -605,7 +631,7 @@ export default function App() {
         </View>
       ) : null}
 
-      {settings ? (
+      {currentScreen === 'plants' && settings ? (
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Add plant</Text>
           <TextInput
@@ -641,10 +667,11 @@ export default function App() {
             onPress={handleCreatePlant}
           />
         </View>
-      ) : (
+      ) : currentScreen === 'plants' ? (
         <Text style={styles.muted}>Complete household setup to add your first plant.</Text>
-      )}
+      ) : null}
 
+      {currentScreen === 'plants' ? <>
       <Text style={styles.sectionTitle}>Plant collection</Text>
       {plants.length === 0 ? (
         <Text style={styles.muted}>No plants yet. Add your first plant to begin.</Text>
@@ -660,7 +687,7 @@ export default function App() {
                 <Pressable
                   key={plant.id}
                   style={[styles.card, selectedPlantId === plant.id && styles.cardSelected]}
-                  onPress={() => setSelectedPlantId(plant.id)}
+                  onPress={() => { setSelectedPlantId(plant.id); openScreen('plant-detail'); }}
                 >
                   <View style={styles.collectionHeader}>
                     <Text style={styles.cardTitle}>{plant.displayName}</Text>
@@ -676,7 +703,9 @@ export default function App() {
         ))
       )}
 
-      <View style={styles.card}>
+      </> : null}
+
+      {currentScreen === 'today' ? <View style={styles.card}>
         <Text style={styles.sectionTitle}>Daily planner</Text>
         {plannerGroups.length === 0 ? (
           <Text style={styles.muted}>Everything is on track. No care items are due right now.</Text>
@@ -765,9 +794,22 @@ export default function App() {
         )}
       </View>
 
-      {selectedPlant ? (
+      </View> : null}
+
+      {currentScreen === 'journal' ? <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Journal</Text>
+        {journalEvents.length === 0 ? <Text style={styles.muted}>No care events recorded yet.</Text> : journalEvents.map(({ event, plantName, archived }) => (
+          <View key={event.id} style={styles.taskRow}>
+            <Text style={styles.cardTitle}>{careEventOptions.find((option) => option.type === event.type)?.label ?? event.type}</Text>
+            <Text>{plantName} · {event.date}{archived ? ' · Archived' : ''}</Text>
+            <Button title="Open plant" onPress={() => { setSelectedPlantId(event.plantId); openScreen('plant-detail'); }} />
+          </View>
+        ))}
+      </View> : null}
+
+      {currentScreen === 'plant-detail' && selectedPlant ? (
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Plant detail</Text>
+          <Text style={styles.sectionTitle}>Plant overview</Text>
           <Text style={styles.cardTitle}>{selectedPlant.plant.displayName}</Text>
           <Text>{selectedPlant.plant.genus}{selectedPlant.plant.species ? ` • ${selectedPlant.plant.species}` : ''}</Text>
           <Text style={styles.inlineStatus}>Taxonomic level: {selectedPlant.plant.taxonomicLevel}</Text>
@@ -897,18 +939,38 @@ export default function App() {
         </View>
       ) : null}
     </ScrollView>
+    <View style={styles.bottomNavigation}>
+      {(['today', 'plants', 'journal'] as const).map((screen) => (
+        <Pressable key={screen} accessibilityRole="button" accessibilityState={{ selected: currentScreen === screen }} onPress={() => navigatePrimary(screen)} style={[styles.navItem, currentScreen === screen && styles.navItemSelected]}>
+          <Text style={[styles.navLabel, currentScreen === screen && styles.navLabelSelected]}>{screen === 'today' ? 'Today' : screen === 'plants' ? 'My Plants' : 'Journal'}</Text>
+        </Pressable>
+      ))}
+    </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  appShell: { flex: 1, backgroundColor: '#f5f7f3' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
+  headerAction: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#e8f6ef' },
+  headerActionText: { color: '#1f7a4d', fontWeight: '700' },
+  headerSpacer: { width: 48 },
+  bottomNavigation: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#dfe9df', backgroundColor: '#fff', paddingHorizontal: 8, paddingTop: 8, paddingBottom: 18 },
+  navItem: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10 },
+  navItemSelected: { backgroundColor: '#e8f6ef' },
+  navLabel: { color: '#5a6a5e', fontWeight: '600' },
+  navLabelSelected: { color: '#1f7a4d' },
   container: {
     padding: 24,
-    paddingTop: 72,
+    paddingTop: 24,
     paddingBottom: 48,
     backgroundColor: '#f5f7f3',
   },
   title: {
-    fontSize: 32,
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 28,
     fontWeight: '700',
     marginBottom: 16,
   },
