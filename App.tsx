@@ -15,8 +15,11 @@ import { openPersistenceStore } from './src/adapters/sqlite/database';
 import {
   applyPlantScheduleAction,
   archivePlant,
+  createCareEvent,
   createPlant,
+  deleteCareEvent,
   deletePlant,
+  editCareEvent,
   getPostponementQuickChoices,
   isValidCustomPostponementDays,
   projectHouseholdPlannerItems,
@@ -32,15 +35,28 @@ import { findPlantKnowledge, getPlantTaxonomyOptions } from './src/domain/knowle
 import type { ISODateString } from './src/domain/scheduling/types';
 import type { PersistenceStore } from './src/domain/persistence/repositories';
 import type {
+  CareEvent,
+  CareEventType,
   HouseholdSettings,
   PlantCareConfiguration,
   PlantRecord,
 } from './src/domain/persistence/types';
 
-const todayIso = (): ISODateString => new Date().toISOString().slice(0, 10) as ISODateString;
+const todayIso = (): ISODateString => {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}` as ISODateString;
+};
 const knowledgeOptions = ['beginner', 'intermediate', 'experienced'] as const;
 const commitmentOptions = ['casual', 'moderate', 'committed'] as const;
 const plantTaxonomyOptions = getPlantTaxonomyOptions();
+const careEventOptions: readonly { type: CareEventType; label: string }[] = [
+  { type: 'WATERING', label: 'Watering' },
+  { type: 'FERTILIZING', label: 'Fertilizing' },
+  { type: 'REPOTTING', label: 'Repotting' },
+  { type: 'PROPAGATION', label: 'Propagation' },
+];
 
 function isValidTaxonomySelection(genus: string, species: string | undefined): boolean {
   const taxonomy = plantTaxonomyOptions.find((option) => option.genus === genus);
@@ -70,6 +86,11 @@ export default function App() {
   const [draftPlantSpecies, setDraftPlantSpecies] = useState<string | undefined>();
   const [draftFertilizerMode, setDraftFertilizerMode] = useState<'NONE' | 'LIQUID' | 'LONG_TERM'>('NONE');
   const [draftSchedulingEnabled, setDraftSchedulingEnabled] = useState(true);
+  const [careEvents, setCareEvents] = useState<CareEvent[]>([]);
+  const [careEventType, setCareEventType] = useState<CareEventType>('WATERING');
+  const [careEventDate, setCareEventDate] = useState<string>(todayIso());
+  const [editingCareEventId, setEditingCareEventId] = useState<string | null>(null);
+  const [isCareEventsLoading, setIsCareEventsLoading] = useState(false);
   const [plannerItems, setPlannerItems] = useState<PlannerItem[]>([]);
   const [customPostponementDays, setCustomPostponementDays] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -78,7 +99,11 @@ export default function App() {
   const [isPlannerActionPending, setIsPlannerActionPending] = useState(false);
 
   const refreshPlants = async (nextStore: PersistenceStore) => {
-    const nextPlants = await nextStore.plants.list(false);
+    const [activePlants, archivedPlants] = await Promise.all([
+      nextStore.plants.list(false),
+      nextStore.plants.list(true),
+    ]);
+    const nextPlants = [...activePlants, ...archivedPlants];
     setPlants(nextPlants);
     if (nextPlants.length === 0) {
       setSelectedPlantId(null);
@@ -155,6 +180,35 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (!store || !selectedPlant) {
+      setCareEvents([]);
+      setIsCareEventsLoading(false);
+      return;
+    }
+
+    let active = true;
+    setIsCareEventsLoading(true);
+    void (async () => {
+      try {
+        const events = await store.careEvents.listForPlant(selectedPlant.plant.id);
+        if (active) setCareEvents([...events]);
+      } catch (error) {
+        if (active) {
+          const message = error instanceof Error ? error.message : 'Could not load care history.';
+          setErrorMessage(message);
+          setStatusMessage(null);
+        }
+      } finally {
+        if (active) setIsCareEventsLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [store, selectedPlant]);
+
+  useEffect(() => {
     if (!selectedPlant) return;
     setDraftPlantName(selectedPlant.plant.displayName);
     setDraftPlantGenus(selectedPlant.plant.genus);
@@ -162,6 +216,22 @@ export default function App() {
     setDraftFertilizerMode(selectedPlant.care.fertilizerMode);
     setDraftSchedulingEnabled(selectedPlant.care.schedulingEnabled);
   }, [selectedPlant]);
+
+  useEffect(() => {
+    setCareEventType('WATERING');
+    setCareEventDate(todayIso());
+    setEditingCareEventId(null);
+  }, [selectedPlantId]);
+
+  const careEventGroups = useMemo(() => {
+    const groups = new Map<string, CareEvent[]>();
+    for (const event of careEvents) {
+      const group = groups.get(event.date) ?? [];
+      group.push(event);
+      groups.set(event.date, group);
+    }
+    return [...groups].map(([date, events]) => ({ date, events }));
+  }, [careEvents]);
 
   const plannerGroups = useMemo(
     () => (['WATERING', 'FERTILIZING'] as const)
@@ -336,6 +406,72 @@ export default function App() {
       plannerActionInFlight.current = false;
       setIsPlannerActionPending(false);
     }
+  };
+
+  const handleSaveCareEvent = async () => {
+    if (!store || !selectedPlant || selectedPlant.plant.archived) return;
+
+    try {
+      setErrorMessage(null);
+      setStatusMessage(editingCareEventId ? 'Updating journal event…' : 'Adding journal event…');
+      const input = {
+        id: editingCareEventId
+          ?? `care-event-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        plantId: selectedPlant.plant.id,
+        type: careEventType,
+        date: careEventDate as ISODateString,
+        today: todayIso(),
+      };
+      const event = editingCareEventId
+        ? await editCareEvent(input, store)
+        : await createCareEvent(input, store);
+      setCareEvents([...await store.careEvents.listForPlant(selectedPlant.plant.id)]);
+      setEditingCareEventId(null);
+      setCareEventType('WATERING');
+      setCareEventDate(todayIso());
+      setStatusMessage(`${event.type.toLowerCase()} journal event ${editingCareEventId ? 'updated' : 'added'}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not save journal event.';
+      setErrorMessage(message);
+      setStatusMessage(null);
+    }
+  };
+
+  const handleDeleteCareEvent = async (eventId: string) => {
+    if (!store || !selectedPlant || selectedPlant.plant.archived) return;
+
+    try {
+      setErrorMessage(null);
+      setStatusMessage('Deleting journal event…');
+      const deleted = await deleteCareEvent(selectedPlant.plant.id, eventId, store);
+      setCareEvents([...await store.careEvents.listForPlant(selectedPlant.plant.id)]);
+      if (editingCareEventId === eventId) {
+        setEditingCareEventId(null);
+        setCareEventType('WATERING');
+        setCareEventDate(todayIso());
+      }
+      setStatusMessage(deleted ? 'Journal event deleted.' : 'Journal event was already deleted.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not delete journal event.';
+      setErrorMessage(message);
+      setStatusMessage(null);
+    }
+  };
+
+  const handleEditCareEvent = (event: CareEvent) => {
+    setEditingCareEventId(event.id);
+    setCareEventType(event.type);
+    setCareEventDate(event.date);
+    setErrorMessage(null);
+    setStatusMessage(null);
+  };
+
+  const handleCancelCareEventEdit = () => {
+    setEditingCareEventId(null);
+    setCareEventType('WATERING');
+    setCareEventDate(todayIso());
+    setErrorMessage(null);
+    setStatusMessage(null);
   };
 
   const handleScheduleAction = async (
@@ -636,6 +772,77 @@ export default function App() {
           <Text>{selectedPlant.plant.genus}{selectedPlant.plant.species ? ` • ${selectedPlant.plant.species}` : ''}</Text>
           <Text style={styles.inlineStatus}>Taxonomic level: {selectedPlant.plant.taxonomicLevel}</Text>
           <Text style={styles.inlineStatus}>Scheduling: {selectedPlant.care.schedulingEnabled ? 'enabled' : 'disabled'}</Text>
+
+          <View style={styles.detailBlock}>
+            <Text style={styles.summaryTitle}>Care journal</Text>
+            {selectedPlant.plant.archived ? (
+              <Text style={styles.muted}>Archived plant history is read-only.</Text>
+            ) : (
+              <>
+                <Text style={styles.label}>
+                  {editingCareEventId ? 'Edit care event' : 'Add care event'}
+                </Text>
+                <View style={styles.choiceGrid}>
+                  {careEventOptions.map(({ type, label }) => (
+                    <Pressable
+                      key={type}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: careEventType === type }}
+                      onPress={() => setCareEventType(type)}
+                      style={[styles.choice, careEventType === type && styles.choiceSelected]}
+                    >
+                      <Text style={[styles.choiceText, careEventType === type && styles.choiceTextSelected]}>
+                        {label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <DatePickerField
+                  label="Event date"
+                  value={careEventDate}
+                  maximumDate={todayIso()}
+                  onChange={setCareEventDate}
+                />
+                <View style={styles.actionRow}>
+                  <Button
+                    title={editingCareEventId ? 'Save event' : 'Add event'}
+                    onPress={handleSaveCareEvent}
+                  />
+                  {editingCareEventId ? (
+                    <Button title="Cancel" onPress={handleCancelCareEventEdit} />
+                  ) : null}
+                </View>
+              </>
+            )}
+            {isCareEventsLoading ? (
+              <Text style={styles.muted}>Loading care history…</Text>
+            ) : careEventGroups.length === 0 ? (
+              <Text style={styles.muted}>No care events recorded yet.</Text>
+            ) : (
+              careEventGroups.map(({ date, events }) => (
+                <View key={date} style={styles.taskGroup}>
+                  <Text style={styles.groupTitle}>{date}</Text>
+                  {events.map((event) => (
+                    <View key={event.id} style={styles.taskRow}>
+                      <Text style={styles.cardTitle}>
+                        {careEventOptions.find((option) => option.type === event.type)?.label ?? event.type}
+                      </Text>
+                      {!selectedPlant.plant.archived ? (
+                        <View style={styles.actionRow}>
+                          <Button title="Edit" onPress={() => handleEditCareEvent(event)} />
+                          <Button
+                            title="Delete"
+                            color="#b42318"
+                            onPress={() => handleDeleteCareEvent(event.id)}
+                          />
+                        </View>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              ))
+            )}
+          </View>
 
           <View style={styles.editSection}>
             <Text style={styles.summaryTitle}>Edit plant</Text>
