@@ -1,0 +1,33 @@
+name: Research or technical decision
+description: Record an unresolved question before implementation.
+title: "[Research]: "
+labels: []
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Question to resolve
+      description: State the uncertainty and why it matters.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Current evidence and constraints
+      description: Link relevant code, tests, specs, and plans.
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Options and trade-offs
+      description: Include a recommended option if evidence supports one.
+    validations:
+      required: false
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Decision and follow-up
+      description: Fill in the decision, rationale, and resulting implementation issue(s) after research.
+    validations:
+      required: false
