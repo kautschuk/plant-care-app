@@ -14,7 +14,7 @@
     "@types/react": "~19.2.2",
     "@types/sql.js": "^1.4.11",
     "sql.js": "^1.14.2",
-    "typescript": "~6.0.3",
+    "typescript": "~7.0.2",
     "vitest": "^5.0.1"
   },
   "scripts": {
