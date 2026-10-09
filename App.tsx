@@ -26,6 +26,7 @@ import {
   updatePlant,
 } from './src/application';
 import type { PlannerItem, PlannerPlantInput } from './src/application';
+import { DatePickerField } from './src/components/DatePickerField';
 import { PlantTaxonomySelector } from './src/components/PlantTaxonomySelector';
 import { findPlantKnowledge, getPlantTaxonomyOptions } from './src/domain/knowledge';
 import type { ISODateString } from './src/domain/scheduling/types';
@@ -483,17 +484,15 @@ export default function App() {
             onGenusChange={setGenus}
             onSpeciesChange={setSpecies}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Last completed date"
+          <DatePickerField
+            label="Last watered date"
             value={lastCompletedDate}
-            onChangeText={setLastCompletedDate}
+            onChange={setLastCompletedDate}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Last fertilizing date"
+          <DatePickerField
+            label="Last fertilized date"
             value={lastFertilizingDate}
-            onChangeText={setLastFertilizingDate}
+            onChange={setLastFertilizingDate}
           />
 
           <View style={styles.switchRow}>
