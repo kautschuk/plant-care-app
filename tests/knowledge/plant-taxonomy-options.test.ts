@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { getPlantTaxonomyOptions } from '../../src/domain/knowledge';
+import { getPlantTaxonomyOptions, findPlantKnowledge } from '../../src/domain/knowledge';
+import { allCatalogEntries } from '../../src/domain/knowledge/catalog';
 
 describe('plant taxonomy options', () => {
-  it('includes each catalog genus once in catalog order', () => {
+  it('includes every catalog genus once and preserves common plant coverage', () => {
     const options = getPlantTaxonomyOptions();
+    const genera = options.map((option) => option.genus);
 
-    expect(options.map((option) => option.genus)).toEqual([
+    expect(new Set(genera).size).toBe(genera.length);
+    expect(genera).toEqual(expect.arrayContaining([
       'Monstera',
       'Sansevieria',
       'Phalaenopsis',
-    ]);
-    expect(new Set(options.map((option) => option.genus)).size).toBe(options.length);
+      'Philodendron',
+      'Ficus',
+      'Hoya',
+      'Epipremnum',
+      'Zamioculcas',
+    ]));
+    expect(allCatalogEntries().length).toBeGreaterThanOrEqual(100);
   });
 
   it('keeps species choices specific to their genus with canonical values', () => {
@@ -29,15 +37,20 @@ describe('plant taxonomy options', () => {
     expect(monstera?.genusLevelAvailable).toBe(false);
   });
 
-  it('marks a genus-level catalog entry without inventing species options', () => {
+  it('supports species choices alongside genus-level fallback', () => {
     const phalaenopsis = getPlantTaxonomyOptions().find(
       (option) => option.genus === 'Phalaenopsis',
     );
 
-    expect(phalaenopsis).toEqual({
-      genus: 'Phalaenopsis',
-      species: [],
-      genusLevelAvailable: true,
+    expect(phalaenopsis?.genusLevelAvailable).toBe(true);
+    expect(phalaenopsis?.species).toContainEqual({
+      label: 'Amabilis',
+      value: 'Phalaenopsis amabilis',
     });
+    expect(findPlantKnowledge({ genus: 'Phalaenopsis' }).status).toBe('FOUND');
+    expect(findPlantKnowledge({
+      genus: 'Phalaenopsis',
+      species: 'Phalaenopsis amabilis',
+    }).status).toBe('FOUND');
   });
 });
