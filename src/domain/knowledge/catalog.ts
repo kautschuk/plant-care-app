@@ -382,9 +382,11 @@ function commonSpeciesRecords(): readonly CatalogRecord[] {
       taxonomicLevel: 'SPECIES',
       seasonalModel: 'GROWING_DORMANT',
       wateringIntervals: seasonalIntervals(water.growing, water.dormant),
-      fertilizingIntervals: seasonalIntervals(fertilizerGrowing, fertilizerDormant),
-      fertilizerModes: ['LIQUID'],
-      fertilizationApplicable: true,
+      fertilizingIntervals: genus === 'Dionaea' || genus === 'Pinguicula'
+        ? undefined
+        : seasonalIntervals(fertilizerGrowing, fertilizerDormant),
+      fertilizerModes: genus === 'Dionaea' || genus === 'Pinguicula' ? ['NONE'] : ['LIQUID'],
+      fertilizationApplicable: genus !== 'Dionaea' && genus !== 'Pinguicula',
       seasonFor: (climate, today) => seasonForCatalogRecord('GROWING_DORMANT', climate, today),
     } satisfies CatalogRecord;
   });
