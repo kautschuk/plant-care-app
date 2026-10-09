@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Approved MVP specification
+    url: https://github.com/kautschuk/plant-care-app/blob/main/docs/superpowers/specs/2026-09-14-plant-care-mvp-design.md
+    about: Check the approved scope before proposing new product behavior.
+  - name: Implementation plans
+    url: https://github.com/kautschuk/plant-care-app/tree/main/docs/superpowers/plans
+    about: Check existing plans and task checkboxes before opening implementation work.
