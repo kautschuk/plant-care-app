@@ -1,0 +1,48 @@
+name: Feature or implementation task
+description: Track work that advances an approved requirement or implementation plan.
+title: "[Task]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep the approved MVP specification and existing implementation plans as the source of truth. Link the relevant document and avoid introducing new scope implicitly.
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should be true when this task is complete?
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Source of truth
+      description: Link the approved spec, implementation plan, or existing issue that authorizes this work.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Observable, testable conditions for completion.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Implementation notes
+      description: Constraints, dependencies, test strategy, and relevant files.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Scope and quality checks
+      options:
+        - label: This does not conflict with the approved MVP specification.
+        - label: Existing code and tests were checked to avoid duplicate work.
+        - label: Tests or verification steps are defined.
