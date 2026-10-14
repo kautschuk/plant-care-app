@@ -99,6 +99,8 @@ export default function App() {
   const [editingCareEventId, setEditingCareEventId] = useState<string | null>(null);
   const [isCareEventsLoading, setIsCareEventsLoading] = useState(false);
   const [plannerItems, setPlannerItems] = useState<PlannerItem[]>([]);
+  const [isPlannerLoading, setIsPlannerLoading] = useState(false);
+  const [plannerError, setPlannerError] = useState<string | null>(null);
   const [customPostponementDays, setCustomPostponementDays] = useState<Record<string, string>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -147,32 +149,47 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!store || !settings) return;
+    if (!store || !settings) {
+      setPlannerItems([]);
+      setIsPlannerLoading(false);
+      return;
+    }
 
     let active = true;
+    setIsPlannerLoading(true);
+    setPlannerError(null);
     void (async () => {
-      const projectionPlants: PlannerPlantInput[] = [];
-      for (const { plant, care } of plants) {
-        if (!care.schedulingEnabled) continue;
-        const schedule = await store.schedules.get(plant.id);
-        if (!schedule) continue;
-        const lookup = findPlantKnowledge({ genus: plant.genus, species: plant.species });
-        if (lookup.status !== 'FOUND') continue;
+      try {
+        const projectionPlants: PlannerPlantInput[] = [];
+        for (const { plant, care } of plants) {
+          if (plant.archived || !care.schedulingEnabled) continue;
+          const schedule = await store.schedules.get(plant.id);
+          if (!schedule) continue;
+          const lookup = findPlantKnowledge({ genus: plant.genus, species: plant.species });
+          if (lookup.status !== 'FOUND') continue;
 
-        projectionPlants.push({
-          plantId: plant.id,
-          plantName: plant.displayName,
-          schedule,
-          knowledge: lookup.entry,
-        });
-      }
+          projectionPlants.push({
+            plantId: plant.id,
+            plantName: plant.displayName,
+            schedule,
+            knowledge: lookup.entry,
+          });
+        }
 
-      if (active) {
-        setPlannerItems(projectHouseholdPlannerItems({
-          today: todayIso(),
-          climate: settings.climate,
-          plants: projectionPlants,
-        }));
+        if (active) {
+          setPlannerItems(projectHouseholdPlannerItems({
+            today: todayIso(),
+            climate: settings.climate,
+            plants: projectionPlants,
+          }));
+        }
+      } catch (error) {
+        if (active) {
+          setPlannerError(error instanceof Error ? error.message : "Could not load today's care tasks.");
+          setPlannerItems([]);
+        }
+      } finally {
+        if (active) setIsPlannerLoading(false);
       }
     })();
 
@@ -707,7 +724,14 @@ export default function App() {
 
       {currentScreen === 'today' ? <View style={styles.card}>
         <Text style={styles.sectionTitle}>Daily planner</Text>
-        {plannerGroups.length === 0 ? (
+        {!store || !settings || isPlannerLoading ? (
+          <Text accessibilityRole="text" style={styles.muted}>Loading today's care tasks…</Text>
+        ) : plannerError ? (
+          <View>
+            <Text accessibilityRole="alert" style={styles.error}>Could not load today's care tasks: {plannerError}</Text>
+            <Button title="Retry" onPress={() => { setPlannerError(null); setIsPlannerLoading(true); setPlants((current) => [...current]); }} />
+          </View>
+        ) : plannerGroups.length === 0 ? (
           <Text style={styles.muted}>Everything is on track. No care items are due right now.</Text>
         ) : (
           plannerGroups.map((group) => (
@@ -742,6 +766,7 @@ export default function App() {
                           </View>
                           <Text>{item.dueDate}</Text>
                           <View style={styles.actionRow}>
+                            <Button title="Open plant" onPress={() => { setSelectedPlantId(item.plantId); openScreen('plant-detail'); }} />
                             <Button
                               title="Complete"
                               disabled={isPlannerActionPending}
