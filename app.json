@@ -16,7 +16,8 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.kautschuk.plantcareapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -24,6 +25,11 @@
     "plugins": [
       "expo-sqlite",
       "@react-native-community/datetimepicker"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b3d9d341-6d26-4c13-9d4d-622a0c93addd"
+      }
+    }
   }
 }
