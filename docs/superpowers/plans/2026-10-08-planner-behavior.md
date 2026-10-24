@@ -9,7 +9,7 @@
 **Tech Stack:** TypeScript 6, React Native / Expo SDK 57, Vitest.
 
 **Spec:** [docs/superpowers/specs/2026-09-14-plant-care-mvp-design.md](../specs/2026-09-14-plant-care-mvp-design.md)  
-**Implementation context:** [docs/superpowers/handoffs/2026-10-08-next-session-handoff.md](../handoffs/2026-10-08-next-session-handoff.md)
+**Implementation context:** The originally referenced `docs/superpowers/handoffs/2026-10-08-next-session-handoff.md` is not present in the repository tree. Use the current code, tests, and associated issue/PR history as implementation evidence.
 
 ## Global Constraints
 
