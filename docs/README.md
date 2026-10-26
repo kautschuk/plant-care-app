@@ -21,9 +21,17 @@ Plans under [superpowers/plans/](superpowers/plans/) record the implementation s
 - [Local persistence](superpowers/plans/2026-10-08-local-persistence.md)
 - [Searchable plant taxonomy selectors](superpowers/plans/2026-10-09-searchable-plant-taxonomy-selectors.md)
 
-## Wiki migration seed
+## GitHub Wiki
 
-The files in [wiki-seed/](wiki-seed/) are curated starter pages intended to be published to the [GitHub Wiki](https://github.com/kautschuk/plant-care-app/wiki). They are a migration staging area, not an alternative canonical specification. After the Wiki pages are published and validated, remove the seed copies in a follow-up PR so the Wiki is the maintained human-readable portal and the specifications remain in this repository.
+The [GitHub Wiki](https://github.com/kautschuk/plant-care-app/wiki) is the human-readable documentation portal. Use it for orientation and workflow guidance:
+
+- [Home](https://github.com/kautschuk/plant-care-app/wiki)
+- [Product Overview](https://github.com/kautschuk/plant-care-app/wiki/Product-Overview)
+- [Architecture Overview](https://github.com/kautschuk/plant-care-app/wiki/Architecture-Overview)
+- [Development Workflow](https://github.com/kautschuk/plant-care-app/wiki/Development-Workflow)
+- [Source Documents](https://github.com/kautschuk/plant-care-app/wiki/Source-Documents)
+
+The repository remains authoritative for approved specifications and implementation plans. Update those files through pull requests alongside the implementation they govern; keep Wiki pages concise and link back to canonical repository documents rather than duplicating their full requirements.
 
 ## Maintenance rules
 
