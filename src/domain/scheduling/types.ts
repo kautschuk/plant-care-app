@@ -27,7 +27,8 @@ export function validateISODate(
   }
 
   const [year, month, day] = value.split('-').map(Number);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
+  const parsed = new Date(0);
+  parsed.setUTCFullYear(year, month - 1, day);
   if (
     parsed.getUTCFullYear() !== year ||
     parsed.getUTCMonth() !== month - 1 ||

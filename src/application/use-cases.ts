@@ -163,11 +163,9 @@ export async function createPlant(
     fertilizerMode: input.fertilizerMode ?? 'NONE',
   };
 
-  await resolvedStore.plants.save(plant, care);
-
-  const settings = await resolvedStore.householdSettings.get();
   let schedule: ScheduleState | undefined;
   if (care.schedulingEnabled) {
+    const settings = await resolvedStore.householdSettings.get();
     if (!settings) {
       throw new PersistenceError(
         'INVALID_DATA',
@@ -191,10 +189,13 @@ export async function createPlant(
       climate: settings.climate,
       careType: 'WATERING',
     });
-
-    await resolvedStore.schedules.save(plant.id, initialized.state);
     schedule = initialized.state;
   }
+
+  await resolvedStore.transaction(async (repositories) => {
+    await repositories.plants.save(plant, care);
+    if (schedule) await repositories.schedules.save(plant.id, schedule);
+  });
 
   return { plant, care, schedule };
 }

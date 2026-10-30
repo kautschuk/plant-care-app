@@ -14,4 +14,4 @@ The [GitHub Wiki](https://github.com/kautschuk/plant-care-app/wiki) is intended 
 
 ## Development
 
-See the [development workflow documentation](https://github.com/kautschuk/plant-care-app/wiki/Development-Workflow) once the Wiki seed pages have been published. Until then, the repository's AGENTS.md, package scripts, and CI configuration remain authoritative for exact setup and verification commands.
+Follow the [development workflow documentation](https://github.com/kautschuk/plant-care-app/wiki/Development-Workflow). Exact setup and verification commands are defined in [AGENTS.md](AGENTS.md), [package.json](package.json), and the [CI workflow](.github/workflows/ci.yml).

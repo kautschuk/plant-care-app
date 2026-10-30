@@ -24,7 +24,7 @@ export function decodeCareScheduleState(
 ): CareScheduleState {
   let payload: unknown;
   try {
-    payload = JSON.parse(serialized) as unknown;
+    payload = JSON.parse(serialized);
   } catch (error) {
     throw invalidData('Schedule state is not valid JSON', error);
   }
@@ -88,18 +88,18 @@ function validateLearnedAdjustments(value: unknown): LearnedAdjustments {
   if (value.model === 'YEAR_ROUND') {
     if (
       !hasOnlyKeys(value, ['model', 'days']) ||
-      !Number.isInteger(value.days)
+      !isInteger(value.days)
     ) {
       throw invalidData('Year-round adjustments require an integer day value');
     }
-    return { model: 'YEAR_ROUND', days: value.days as number };
+    return { model: 'YEAR_ROUND', days: value.days };
   }
 
   if (value.model === 'GROWING_DORMANT') {
     if (
       !hasOnlyKeys(value, ['model', 'growingDays', 'dormantDays']) ||
-      !Number.isInteger(value.growingDays) ||
-      !Number.isInteger(value.dormantDays)
+      !isInteger(value.growingDays) ||
+      !isInteger(value.dormantDays)
     ) {
       throw invalidData(
         'Growing/dormant adjustments require integer day values for both seasons',
@@ -107,8 +107,8 @@ function validateLearnedAdjustments(value: unknown): LearnedAdjustments {
     }
     return {
       model: 'GROWING_DORMANT',
-      growingDays: value.growingDays as number,
-      dormantDays: value.dormantDays as number,
+      growingDays: value.growingDays,
+      dormantDays: value.dormantDays,
     };
   }
 
@@ -136,6 +136,10 @@ function hasOnlyKeys(
   allowed: readonly string[],
 ): boolean {
   return Object.keys(value).every((key) => allowed.includes(key));
+}
+
+function isInteger(value: unknown): value is number {
+  return Number.isInteger(value);
 }
 
 function invalidData(message: string, originalCause?: unknown): PersistenceError {
