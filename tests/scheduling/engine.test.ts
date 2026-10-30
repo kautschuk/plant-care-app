@@ -330,6 +330,15 @@ describe('scheduling engine contract', () => {
     );
   });
 
+  it('validates calendar dates in years below 0100 without shifting centuries', () => {
+    expect(validateISODate('0000-02-29')).toBe('0000-02-29');
+    expect(validateISODate('0004-02-29')).toBe('0004-02-29');
+    expect(validateISODate('0099-12-31')).toBe('0099-12-31');
+    expect(() => validateISODate('0001-02-29')).toThrow(
+      'Date must be a valid ISO calendar date',
+    );
+  });
+
   it('exposes the validated date constructor from the public barrel', () => {
     expect(publicValidateISODate('2026-09-14')).toBe('2026-09-14');
     expect(() => publicValidateISODate('2026-09-15', date('2026-09-14'))).toThrow(
