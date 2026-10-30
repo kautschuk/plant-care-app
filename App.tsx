@@ -33,6 +33,7 @@ import { DatePickerField } from './src/components/DatePickerField';
 import { PlantTaxonomySelector } from './src/components/PlantTaxonomySelector';
 import { findPlantKnowledge, getPlantTaxonomyOptions } from './src/domain/knowledge';
 import type { ISODateString } from './src/domain/scheduling/types';
+import { validateISODate } from './src/domain/scheduling/types';
 import type { PersistenceStore } from './src/domain/persistence/repositories';
 import type {
   CareEvent,
@@ -47,7 +48,7 @@ const todayIso = (): ISODateString => {
   const date = new Date();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  return `${date.getFullYear()}-${month}-${day}` as ISODateString;
+  return validateISODate(`${date.getFullYear()}-${month}-${day}`);
 };
 const knowledgeOptions = ['beginner', 'intermediate', 'experienced'] as const;
 const commitmentOptions = ['casual', 'moderate', 'committed'] as const;
@@ -376,8 +377,8 @@ export default function App() {
           species,
           fertilizerMode: 'LIQUID',
           schedulingEnabled,
-          lastCompletedDate: lastCompletedDate as any,
-          lastFertilizingDate: lastFertilizingDate as any,
+          lastCompletedDate: validateISODate(lastCompletedDate),
+          lastFertilizingDate: validateISODate(lastFertilizingDate),
         },
         store,
       );
@@ -457,7 +458,7 @@ export default function App() {
           ?? `care-event-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         plantId: selectedPlant.plant.id,
         type: careEventType,
-        date: careEventDate as ISODateString,
+        date: validateISODate(careEventDate),
         today: todayIso(),
       };
       const event = editingCareEventId
