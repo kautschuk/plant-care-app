@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { openPersistenceStore } from './src/adapters/sqlite/database';
 import {
@@ -35,6 +36,7 @@ import { findPlantKnowledge, getPlantTaxonomyOptions } from './src/domain/knowle
 import type { ISODateString } from './src/domain/scheduling/types';
 import { validateISODate } from './src/domain/scheduling/types';
 import type { PersistenceStore } from './src/domain/persistence/repositories';
+import { getBottomNavigationPadding } from './src/ui/layout';
 import type {
   CareEvent,
   CareEventType,
@@ -68,7 +70,8 @@ function isValidTaxonomySelection(genus: string, species: string | undefined): b
     : taxonomy.genusLevelAvailable;
 }
 
-export default function App() {
+function PlantCareApp() {
+  const insets = useSafeAreaInsets();
   const [store, setStore] = useState<PersistenceStore | null>(null);
   const [screenStack, setScreenStack] = useState<AppScreen[]>(['today']);
   const [journalEvents, setJournalEvents] = useState<Array<{ event: CareEvent; plantName: string; archived: boolean }>>([]);
@@ -963,7 +966,7 @@ export default function App() {
         </View>
       ) : null}
     </ScrollView>
-    <View style={styles.bottomNavigation}>
+    <View style={[styles.bottomNavigation, { paddingBottom: getBottomNavigationPadding(insets.bottom) }]}>
       {(['today', 'plants', 'journal'] as const).map((screen) => (
         <Pressable key={screen} accessibilityRole="button" accessibilityState={{ selected: currentScreen === screen }} onPress={() => navigatePrimary(screen)} style={[styles.navItem, currentScreen === screen && styles.navItemSelected]}>
           <Text style={[styles.navLabel, currentScreen === screen && styles.navLabelSelected]}>{screen === 'today' ? 'Today' : screen === 'plants' ? 'My Plants' : 'Journal'}</Text>
@@ -974,13 +977,21 @@ export default function App() {
   );
 }
 
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <PlantCareApp />
+    </SafeAreaProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   appShell: { flex: 1, backgroundColor: '#f5f7f3' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 },
   headerAction: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, backgroundColor: '#e8f6ef' },
   headerActionText: { color: '#1f7a4d', fontWeight: '700' },
   headerSpacer: { width: 48 },
-  bottomNavigation: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#dfe9df', backgroundColor: '#fff', paddingHorizontal: 8, paddingTop: 8, paddingBottom: 18 },
+  bottomNavigation: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#dfe9df', backgroundColor: '#fff', paddingHorizontal: 8, paddingTop: 8 },
   navItem: { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10 },
   navItemSelected: { backgroundColor: '#e8f6ef' },
   navLabel: { color: '#5a6a5e', fontWeight: '600' },
