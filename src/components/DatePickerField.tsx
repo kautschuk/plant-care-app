@@ -5,7 +5,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface DatePickerFieldProps {
   readonly label: string;
-  readonly value: string;
+  readonly value?: string;
   readonly onChange: (value: string) => void;
   readonly maximumDate?: string;
 }
@@ -28,6 +28,7 @@ export function DatePickerField({
   maximumDate,
 }: DatePickerFieldProps) {
   const [isPickerVisible, setIsPickerVisible] = useState(false);
+  const pickerValue = value ?? toISODate(new Date());
 
   const handleChange = (_event: DateTimePickerChangeEvent, date: Date) => {
     onChange(toISODate(date));
@@ -56,17 +57,17 @@ export function DatePickerField({
             width: '100%',
           },
           type: 'date',
-          value,
+          value: value ?? '',
         })
       ) : (
         <>
           <Pressable
-            accessibilityLabel={`${label}: ${value}`}
+            accessibilityLabel={`${label}: ${value ?? 'not selected'}`}
             accessibilityRole="button"
             onPress={() => setIsPickerVisible(true)}
             style={styles.select}
           >
-            <Text style={styles.value}>{value}</Text>
+            <Text style={styles.value}>{value ?? 'Select date'}</Text>
           </Pressable>
           {isPickerVisible ? (
             <View style={Platform.OS === 'ios' ? styles.pickerPanel : undefined}>
@@ -76,12 +77,15 @@ export function DatePickerField({
                 maximumDate={maximumDate ? toDate(maximumDate) : undefined}
                 onDismiss={() => setIsPickerVisible(false)}
                 onValueChange={handleChange}
-                value={toDate(value)}
+                value={toDate(pickerValue)}
               />
               {Platform.OS === 'ios' ? (
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => setIsPickerVisible(false)}
+                  onPress={() => {
+                    if (!value) onChange(pickerValue);
+                    setIsPickerVisible(false);
+                  }}
                   style={styles.doneButton}
                 >
                   <Text style={styles.doneText}>Done</Text>
