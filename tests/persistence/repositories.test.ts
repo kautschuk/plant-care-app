@@ -355,6 +355,12 @@ describe('SQLite repositories', () => {
     expect(await store.schedules.get(plant.id)).toBeNull();
     expect(await store.careEvents.listForPlant(plant.id)).toEqual([event]);
 
+    await expect(store.plants.deletePermanently(plant.id)).rejects.toMatchObject({
+      code: 'INVALID_DATA',
+    });
+    expect(await store.plants.get(plant.id)).not.toBeNull();
+
+    await store.plants.archive(plant.id);
     await store.plants.deletePermanently(plant.id);
     expect(await store.careEvents.listForPlant(plant.id)).toEqual([]);
   });

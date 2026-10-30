@@ -32,6 +32,8 @@ import {
 import type { PlannerItem, PlannerPlantInput } from './src/application';
 import { DatePickerField } from './src/components/DatePickerField';
 import { PlantTaxonomySelector } from './src/components/PlantTaxonomySelector';
+import { PlantLifecycleActions } from './src/components/PlantLifecycleActions';
+import { ScheduleReenableFields } from './src/components/ScheduleReenableFields';
 import { findPlantKnowledge, getPlantTaxonomyOptions } from './src/domain/knowledge';
 import type { ISODateString } from './src/domain/scheduling/types';
 import { validateISODate } from './src/domain/scheduling/types';
@@ -97,6 +99,8 @@ function PlantCareApp() {
   const [draftPlantSpecies, setDraftPlantSpecies] = useState<string | undefined>();
   const [draftFertilizerMode, setDraftFertilizerMode] = useState<'NONE' | 'LIQUID' | 'LONG_TERM'>('NONE');
   const [draftSchedulingEnabled, setDraftSchedulingEnabled] = useState(true);
+  const [draftLastWateredDate, setDraftLastWateredDate] = useState<string | undefined>();
+  const [draftLastFertilizedDate, setDraftLastFertilizedDate] = useState<string | undefined>();
   const [careEvents, setCareEvents] = useState<CareEvent[]>([]);
   const [careEventType, setCareEventType] = useState<CareEventType>('WATERING');
   const [careEventDate, setCareEventDate] = useState<string>(todayIso());
@@ -206,6 +210,16 @@ function PlantCareApp() {
     () => plants.find(({ plant }) => plant.id === selectedPlantId) ?? null,
     [plants, selectedPlantId],
   );
+  const draftPlantKnowledge = selectedPlant
+    ? findPlantKnowledge({
+      genus: draftPlantGenus || selectedPlant.plant.genus,
+      species: draftPlantGenus
+        ? draftPlantSpecies
+        : selectedPlant.plant.species,
+    })
+    : null;
+  const requiresFertilizingDate = draftPlantKnowledge?.status === 'FOUND'
+    && draftPlantKnowledge.entry.fertilizerModes.includes('LONG_TERM');
 
   useEffect(() => {
     if (!store || currentScreen !== 'journal') return;
@@ -257,6 +271,8 @@ function PlantCareApp() {
     setDraftPlantSpecies(selectedPlant.plant.species);
     setDraftFertilizerMode(selectedPlant.care.fertilizerMode);
     setDraftSchedulingEnabled(selectedPlant.care.schedulingEnabled);
+    setDraftLastWateredDate(undefined);
+    setDraftLastFertilizedDate(undefined);
   }, [selectedPlant]);
 
   useEffect(() => {
@@ -417,6 +433,12 @@ function PlantCareApp() {
           species: draftPlantSpecies ?? null,
           fertilizerMode: draftFertilizerMode,
           schedulingEnabled: draftSchedulingEnabled,
+          lastCompletedDate: draftLastWateredDate
+            ? validateISODate(draftLastWateredDate)
+            : undefined,
+          lastFertilizingDate: draftLastFertilizedDate
+            ? validateISODate(draftLastFertilizedDate)
+            : undefined,
         },
         store,
       );
@@ -913,56 +935,67 @@ function PlantCareApp() {
             )}
           </View>
 
-          <View style={styles.editSection}>
-            <Text style={styles.summaryTitle}>Edit plant</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Plant name"
-              value={draftPlantName}
-              onChangeText={setDraftPlantName}
-            />
-            <PlantTaxonomySelector
-              genus={draftPlantGenus}
-              species={draftPlantSpecies}
-              onGenusChange={setDraftPlantGenus}
-              onSpeciesChange={setDraftPlantSpecies}
-            />
+          {!selectedPlant.plant.archived ? (
+            <View style={styles.editSection}>
+              <Text style={styles.summaryTitle}>Edit plant</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Plant name"
+                value={draftPlantName}
+                onChangeText={setDraftPlantName}
+              />
+              <PlantTaxonomySelector
+                genus={draftPlantGenus}
+                species={draftPlantSpecies}
+                onGenusChange={setDraftPlantGenus}
+                onSpeciesChange={setDraftPlantSpecies}
+              />
 
-            <Text style={styles.label}>Fertilizer mode</Text>
-            <View style={styles.choiceGrid}>
-              {(['NONE', 'LIQUID', 'LONG_TERM'] as const).map((mode) => (
-                <Pressable
-                  key={mode}
-                  style={[styles.choice, draftFertilizerMode === mode && styles.choiceSelected]}
-                  onPress={() => setDraftFertilizerMode(mode)}
-                >
-                  <Text style={[styles.choiceText, draftFertilizerMode === mode && styles.choiceTextSelected]}>
-                    {mode.toLowerCase()}
-                  </Text>
-                </Pressable>
-              ))}
+              <Text style={styles.label}>Fertilizer mode</Text>
+              <View style={styles.choiceGrid}>
+                {(['NONE', 'LIQUID', 'LONG_TERM'] as const).map((mode) => (
+                  <Pressable
+                    key={mode}
+                    style={[styles.choice, draftFertilizerMode === mode && styles.choiceSelected]}
+                    onPress={() => setDraftFertilizerMode(mode)}
+                  >
+                    <Text style={[styles.choiceText, draftFertilizerMode === mode && styles.choiceTextSelected]}>
+                      {mode.toLowerCase()}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <View style={styles.switchRow}>
+                <Text>Enable scheduling</Text>
+                <Switch value={draftSchedulingEnabled} onValueChange={setDraftSchedulingEnabled} />
+              </View>
+
+              <ScheduleReenableFields
+                visible={!selectedPlant.care.schedulingEnabled && draftSchedulingEnabled}
+                requiresFertilizingDate={requiresFertilizingDate}
+                today={todayIso()}
+                lastWateredDate={draftLastWateredDate}
+                lastFertilizedDate={draftLastFertilizedDate}
+                onLastWateredDateChange={setDraftLastWateredDate}
+                onLastFertilizedDateChange={setDraftLastFertilizedDate}
+              />
+
+              <Button
+                title="Save plant details"
+                disabled={!isValidTaxonomySelection(draftPlantGenus, draftPlantSpecies)}
+                onPress={handleUpdatePlant}
+              />
             </View>
+          ) : null}
 
-            <View style={styles.switchRow}>
-              <Text>Enable scheduling</Text>
-              <Switch value={draftSchedulingEnabled} onValueChange={setDraftSchedulingEnabled} />
-            </View>
-
-            <Button
-              title="Save plant details"
-              disabled={!isValidTaxonomySelection(draftPlantGenus, draftPlantSpecies)}
-              onPress={handleUpdatePlant}
-            />
-          </View>
-
-          <View style={styles.actionRow}>
-            {selectedPlant.plant.archived ? (
-              <Button title="Restore plant" onPress={() => handlePlantLifecycleAction(selectedPlant.plant.id, 'restore')} />
-            ) : (
-              <Button title="Archive plant" onPress={() => handlePlantLifecycleAction(selectedPlant.plant.id, 'archive')} />
-            )}
-            <Button title="Delete plant" color="#b42318" onPress={() => handlePlantLifecycleAction(selectedPlant.plant.id, 'delete')} />
-          </View>
+          <PlantLifecycleActions
+            archived={selectedPlant.plant.archived}
+            plantName={selectedPlant.plant.displayName}
+            onArchive={() => handlePlantLifecycleAction(selectedPlant.plant.id, 'archive')}
+            onRestore={() => handlePlantLifecycleAction(selectedPlant.plant.id, 'restore')}
+            onDelete={() => handlePlantLifecycleAction(selectedPlant.plant.id, 'delete')}
+          />
         </View>
       ) : null}
     </ScrollView>

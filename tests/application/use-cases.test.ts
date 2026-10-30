@@ -156,6 +156,49 @@ describe('application use cases', () => {
 
     expect(deactivated.care.schedulingEnabled).toBe(false);
     expect(await store.schedules.get('plant-update')).toBeNull();
+
+    await expect(
+      updatePlant(
+        {
+          id: 'plant-update',
+          schedulingEnabled: true,
+          today: '2026-10-08' as ISODateString,
+        },
+        store,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_DATA' });
+    expect((await store.plants.get('plant-update'))?.care.schedulingEnabled).toBe(false);
+
+    await expect(
+      updatePlant(
+        {
+          id: 'plant-update',
+          schedulingEnabled: true,
+          lastCompletedDate: '2026-10-03' as ISODateString,
+          today: '2026-10-08' as ISODateString,
+        },
+        store,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_DATA' });
+    expect((await store.plants.get('plant-update'))?.care.schedulingEnabled).toBe(false);
+
+    const reenabled = await updatePlant(
+      {
+        id: 'plant-update',
+        schedulingEnabled: true,
+        lastCompletedDate: '2026-10-03' as ISODateString,
+        lastFertilizingDate: '2026-10-04' as ISODateString,
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+    expect(reenabled.care.schedulingEnabled).toBe(true);
+    expect(reenabled.schedule?.careSchedules.WATERING?.lastCompletedDate).toBe(
+      '2026-10-03',
+    );
+    expect(reenabled.schedule?.careSchedules.FERTILIZING?.lastCompletedDate).toBe(
+      '2026-10-04',
+    );
   });
 
   it('records a completed care action inside one transaction', async () => {
@@ -498,8 +541,40 @@ describe('application use cases', () => {
     expect((await store.plants.get('plant-lifecycle'))?.plant.archived).toBe(true);
 
     await restorePlant('plant-lifecycle', store);
-    expect((await store.plants.get('plant-lifecycle'))?.plant.archived).toBe(false);
+    const restoredPlant = await store.plants.get('plant-lifecycle');
+    expect(restoredPlant?.plant.archived).toBe(false);
+    expect(restoredPlant?.care.schedulingEnabled).toBe(false);
+    expect(await store.schedules.get('plant-lifecycle')).toBeNull();
 
+    await expect(
+      updatePlant(
+        {
+          id: 'plant-lifecycle',
+          schedulingEnabled: true,
+          today: '2026-10-08' as ISODateString,
+        },
+        store,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_DATA' });
+    const rescheduledPlant = await updatePlant(
+      {
+        id: 'plant-lifecycle',
+        schedulingEnabled: true,
+        lastCompletedDate: '2026-10-07' as ISODateString,
+        today: '2026-10-08' as ISODateString,
+      },
+      store,
+    );
+    expect(rescheduledPlant.care.schedulingEnabled).toBe(true);
+    expect(rescheduledPlant.schedule?.careSchedules.WATERING?.lastCompletedDate)
+      .toBe('2026-10-07');
+
+    await expect(deletePlant('plant-lifecycle', store)).rejects.toMatchObject({
+      code: 'INVALID_DATA',
+    });
+    expect(await store.plants.get('plant-lifecycle')).not.toBeNull();
+
+    await archivePlant('plant-lifecycle', store);
     await deletePlant('plant-lifecycle', store);
     expect(await store.plants.get('plant-lifecycle')).toBeNull();
   });
