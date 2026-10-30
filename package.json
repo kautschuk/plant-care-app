@@ -23,7 +23,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "vitest run",
+    "test": "vitest run --isolate=false",
     "typecheck": "tsc --noEmit"
   },
   "private": true
