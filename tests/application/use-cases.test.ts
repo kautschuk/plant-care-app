@@ -26,6 +26,27 @@ function addDays(date: string, days: number): string {
 }
 
 describe('application use cases', () => {
+  it('does not save a plant when scheduling requires missing household settings', async () => {
+    const database = await createSqliteTestDriver();
+    await initializeSchema(database);
+    const store = createPersistenceStore(database);
+
+    await expect(
+      createPlant(
+        {
+          id: 'plant-without-settings',
+          displayName: 'Monstera',
+          genus: 'Monstera',
+          species: 'Monstera deliciosa',
+          schedulingEnabled: true,
+        },
+        store,
+      ),
+    ).rejects.toMatchObject({ code: 'INVALID_DATA' });
+
+    expect(await store.plants.get('plant-without-settings')).toBeNull();
+  });
+
   it('stores household settings and initializes a supported plant schedule', async () => {
     const database = await createSqliteTestDriver();
     await initializeSchema(database);
