@@ -263,15 +263,23 @@ export async function updatePlant(
     }
 
     const today = normalizeISODate(input.today ?? currentISODate()) ?? currentISODate();
-    const scheduledState = await resolvedStore.schedules.get(input.id);
-    const lastCompletedDate = normalizeISODate(
-      input.lastCompletedDate ?? scheduledState?.careSchedules.WATERING?.lastCompletedDate ?? today,
-      today,
-    ) ?? today;
-    const lastFertilizingDate = normalizeISODate(
-      input.lastFertilizingDate ?? scheduledState?.careSchedules.FERTILIZING?.lastCompletedDate ?? lastCompletedDate,
-      today,
-    );
+    const lastCompletedDate = normalizeISODate(input.lastCompletedDate, today);
+    if (!lastCompletedDate) {
+      throw new PersistenceError(
+        'INVALID_DATA',
+        'A fresh last-watered date is required before enabling scheduling',
+      );
+    }
+    if (
+      lookup.entry.fertilizerModes.includes('LONG_TERM')
+      && !input.lastFertilizingDate
+    ) {
+      throw new PersistenceError(
+        'INVALID_DATA',
+        'A fresh last-fertilized date is required before enabling scheduling',
+      );
+    }
+    const lastFertilizingDate = normalizeISODate(input.lastFertilizingDate, today);
 
     const initialized = initializeSchedule({
       today,
@@ -473,6 +481,16 @@ export async function deletePlant(
   store?: PersistenceStore,
 ): Promise<void> {
   const resolvedStore = store ?? await defaultStore();
+  const plant = await resolvedStore.plants.get(plantId);
+  if (!plant) {
+    throw new PersistenceError('NOT_FOUND', `Plant ${plantId} was not found`);
+  }
+  if (!plant.plant.archived) {
+    throw new PersistenceError(
+      'INVALID_DATA',
+      'Only archived plants can be permanently deleted',
+    );
+  }
   await resolvedStore.plants.deletePermanently(plantId);
 }
 

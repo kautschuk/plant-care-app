@@ -267,10 +267,18 @@ function createRepositories(
     }),
 
     deletePermanently: (id) => safe('Could not permanently delete plant', async () => {
-      const result = await executor.run('DELETE FROM plants WHERE id = ?', [
-        validateIdentifier(id, 'Plant ID'),
-      ]);
-      if (result.changes === 0) throw notFound('Plant does not exist');
+      const validId = validateIdentifier(id, 'Plant ID');
+      await atomic(async (transaction) => {
+        const row = await transaction.getFirst<Row>(
+          'SELECT archived FROM plants WHERE id = ?',
+          [validId],
+        );
+        if (!row) throw notFound('Plant does not exist');
+        if (!readBoolean(row.archived, 'Plant archived flag')) {
+          throw invalidData('Only archived plants can be permanently deleted');
+        }
+        await transaction.run('DELETE FROM plants WHERE id = ?', [validId]);
+      });
     }),
   };
 
